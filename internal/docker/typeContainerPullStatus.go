@@ -1,0 +1,14 @@
+package docker
+
+type ContainerPullStatus int
+
+const (
+	KContainerPullStatusWaiting ContainerPullStatus = iota + 1
+	KContainerPullStatusDownloading
+	KContainerPullStatusVerifyingChecksum
+	KContainerPullStatusDownloadComplete
+	KContainerPullStatusExtracting
+	KContainerPullStatusPullComplete
+	KContainerPullStatusBuilding
+	KContainerPullStatusComplete
+)
