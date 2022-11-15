@@ -1,9 +1,5 @@
 package docker
 
-import (
-	"github.com/helmutkemper/util"
-)
-
 // ContainerFindIdByName
 //
 // Similar:
@@ -35,13 +31,11 @@ func (e *ContainerBuilder) ContainerFindIdByName(name string) (id string, err er
 	e.dockerSys = DockerSystem{}
 	err = e.dockerSys.Init()
 	if err != nil {
-		util.TraceToLog()
 		return
 	}
 
 	id, err = e.dockerSys.ContainerFindIdByName(name)
 	if err != nil {
-		util.TraceToLog()
 	}
 
 	return

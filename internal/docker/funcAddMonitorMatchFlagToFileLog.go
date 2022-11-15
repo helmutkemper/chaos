@@ -44,7 +44,6 @@ func (e *ContainerBuilder) AddMonitorMatchFlagToFileLog(value, logDirectoryPath 
 
 	err = util.DirMake(logDirectoryPath)
 	if err != nil {
-		util.TraceToLog()
 		return
 	}
 

@@ -44,7 +44,6 @@ func (e *ContainerBuilder) ContainerPause() (err error) {
 	if e.containerID == "" {
 		err = e.getIdByContainerName()
 		if err != nil {
-			util.TraceToLog()
 			return
 		}
 	}

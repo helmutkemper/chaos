@@ -6,7 +6,7 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/go-connections/nat"
-	"github.com/helmutkemper/iotmaker.docker/util"
+	"github.com/helmutkemper/chaos/internal/util"
 	"os"
 )
 

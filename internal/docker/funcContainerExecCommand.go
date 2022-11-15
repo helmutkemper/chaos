@@ -1,7 +1,5 @@
 package docker
 
-import "github.com/helmutkemper/util"
-
 // ContainerExecCommand
 //
 // Português:
@@ -44,7 +42,6 @@ func (e *ContainerBuilder) ContainerExecCommand(
 	if e.containerID == "" {
 		err = e.getIdByContainerName()
 		if err != nil {
-			util.TraceToLog()
 			return
 		}
 	}

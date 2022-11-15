@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"github.com/docker/docker/api/types"
-	"github.com/helmutkemper/iotmaker.docker/util"
+	"github.com/helmutkemper/chaos/internal/util"
 	"io"
 	"io/ioutil"
 	"path/filepath"

@@ -2,7 +2,6 @@ package docker
 
 import (
 	"github.com/docker/docker/api/types/mount"
-	"github.com/helmutkemper/util"
 	"path/filepath"
 )
 
@@ -37,7 +36,6 @@ func (e *ContainerBuilder) AddFileOrFolderToLinkBetweenComputerHostAndContainer(
 
 	computerHostPath, err = filepath.Abs(computerHostPath)
 	if err != nil {
-		util.TraceToLog()
 		return
 	}
 

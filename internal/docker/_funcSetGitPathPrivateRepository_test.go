@@ -2,7 +2,6 @@ package docker
 
 import (
 	"fmt"
-	"github.com/helmutkemper/util"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -64,7 +63,6 @@ func ExampleContainerBuilder_SetGitPathPrivateRepository() {
 	var resp *http.Response
 	resp, err = http.Get("http://localhost:3030/")
 	if err != nil {
-		util.TraceToLog()
 		log.Printf("http.Get().error: %v", err.Error())
 		panic(err)
 	}
@@ -72,7 +70,6 @@ func ExampleContainerBuilder_SetGitPathPrivateRepository() {
 	var body []byte
 	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		util.TraceToLog()
 		log.Printf("http.Get().error: %v", err.Error())
 		panic(err)
 	}

@@ -1,9 +1,5 @@
 package docker
 
-import (
-	"github.com/helmutkemper/util"
-)
-
 // ContainerInspect
 //
 // English:
@@ -25,14 +21,12 @@ func (e *ContainerBuilder) ContainerInspect() (inspect ContainerInspect, err err
 	if e.containerID == "" {
 		err = e.getIdByContainerName()
 		if err != nil {
-			util.TraceToLog()
 			return
 		}
 	}
 
 	inspect, err = e.dockerSys.ContainerInspectParsed(e.containerID)
 	if err != nil {
-		util.TraceToLog()
 	}
 	return
 }

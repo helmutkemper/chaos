@@ -3,6 +3,7 @@ package docker
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -31,37 +32,95 @@ func (e *Manager) Builder() (ref *Builder) {
 	return
 }
 
+func (e *Manager) removeContainerBeforeCreate() (err error) {
+	if e.builder.containerName == "" {
+		return
+	}
+
+	// English: Several containers are created with `container name` + NUMBER
+	// Português: Vários containers são criados com o `nome do container` + _NUMBER
+	var re = regexp.MustCompile("^" + e.builder.containerName + "_\\D+$")
+	var list []NameAndId
+	list, _ = e.builder.ContainerFindIdByNameContains(e.builder.containerName)
+	for k := range list {
+		if list[k].Name == e.builder.containerName {
+			err = e.builder.ContainerRemove(false)
+			if err != nil {
+				err = fmt.Errorf("manager.Init().Error: an container named '%v' already exists. The container must be deleted before continuing", e.builder.containerName)
+				return
+			}
+		} else if re.MatchString(list[k].Name) {
+			err = e.builder.ContainerRemove(false)
+			if err != nil {
+				err = fmt.Errorf("manager.Init().Error: an container named '%v' already exists. The container must be deleted before continuing", e.builder.containerName)
+				return
+			}
+		}
+	}
+
+	return
+}
+
+func (e *Manager) removeImageBeforeCreate() (err error) {
+	var id string
+	id, err = e.builder.ImageFindIdByName(e.builder.imageName)
+	if err == nil {
+		err = e.docker.ImageRemove(id, true, true)
+		if err != nil {
+			err = fmt.Errorf("manager.Init().Error: an image named '%v' already exists. The image must be deleted before continuing", e.builder.imageName)
+			return
+		}
+	}
+
+	return
+}
+
 func (e *Manager) Init() (err error) {
-	err = e.builder.Init()
-	if err != nil {
+
+	// English: Removes the container, if there is one with the same name, before creating
+	// Português: Remove o container, caso haja algum com o mesmo nome, antes de criar
+	if err = e.removeContainerBeforeCreate(); err != nil {
+		return
+	}
+
+	// English: Removes the image, if there is one with the same name, before creating
+	// Português: Remove a imagem, caso haja alguma com o mesmo nome, antes de criar
+	if err = e.removeImageBeforeCreate(); err != nil {
+		return
+	}
+
+	if err = e.builder.Init(); err != nil {
 		err = fmt.Errorf("manager.Init().Builder.Init().Error: %v", err)
 		return
 	}
 
+	// English: Download the image
+	// Português: Faz o download da imagem
 	if !(e.builder.buildFolder || e.builder.buildServer) && e.builder.imageName != "" {
-		err = e.builder.imagePull()
-		if err != nil {
+		if err = e.builder.imagePull(); err != nil {
 			err = fmt.Errorf("manager.Init().Builder.imagePull().Error: %v", err)
 			return
 		}
 	}
 
+	// English: Set when project path is a folder
+	// Português: Definido quando o caminho do projeto é uma pasta
 	if e.builder.buildFolder {
-		_, err = e.builder.ImageBuildFromFolder()
-		if err != nil {
+		if _, err = e.builder.ImageBuildFromFolder(); err != nil {
 			err = fmt.Errorf("manager.Init().Builder.ImageBuildFromFolder().Error: %v", err)
 			return
 		}
+
+		// English: Set when project path ends in .git
+		// Português: Definido quando o caminho do projeto termina em .git
 	} else if e.builder.buildServer {
-		_, err = e.builder.ImageBuildFromServer()
-		if err != nil {
+		if _, err = e.builder.ImageBuildFromServer(); err != nil {
 			err = fmt.Errorf("manager.Init().Builder.ImageBuildFromServer().Error: %v", err)
 			return
 		}
 	}
 
-	err = e.builder.ContainerBuildWithoutStartingItFromImage()
-	if err != nil {
+	if err = e.builder.ContainerBuildWithoutStartingItFromImage(); err != nil {
 		err = fmt.Errorf("manager.Init().Builder.ContainerBuildWithoutStartingItFromImage().Error: %v", err)
 		return
 	}
@@ -474,6 +533,14 @@ func (e *Builder) Get() (ref *Security) {
 
 func (e *Builder) Primordial() (ref *Primordial) {
 	ref = new(Primordial)
+	ref.docker = e.docker
+	ref.builder = e.builder
+
+	return
+}
+
+func (e *Builder) Problem() (ref *Problem) {
+	ref = new(Problem)
 	ref.docker = e.docker
 	ref.builder = e.builder
 

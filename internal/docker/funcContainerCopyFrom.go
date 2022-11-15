@@ -43,7 +43,6 @@ func (e *ContainerBuilder) ContainerCopyFrom(
 	if e.containerID == "" {
 		err = e.getIdByContainerName()
 		if err != nil {
-			util.TraceToLog()
 			return
 		}
 	}
@@ -54,12 +53,10 @@ func (e *ContainerBuilder) ContainerCopyFrom(
 	for k, sourcePath := range containerPathList {
 		reader, stats, err = e.dockerSys.ContainerCopyFrom(e.containerID, sourcePath)
 		if err != nil {
-			util.TraceToLog()
 			return
 		}
 		data, err = ioutil.ReadAll(reader)
 		if err != nil {
-			util.TraceToLog()
 			return
 		}
 		err = ioutil.WriteFile(hostPathList[k], data, 0777)

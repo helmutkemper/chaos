@@ -1,7 +1,7 @@
 package docker
 
 import (
-	"github.com/helmutkemper/iotmaker.docker/util"
+	"github.com/helmutkemper/chaos/internal/util"
 	"math"
 )
 

@@ -534,16 +534,14 @@ binário gerado na primeira etapa é copiado para uma imagem nova, o que deixa a
 		// Inialize the container object
 		err = container.Init()
 		if err != nil {
-			util.TraceToLog()
-			log.Printf("Error: %v", err.Error())
+						log.Printf("Error: %v", err.Error())
 			log.Printf(container.GetProblem())
 			return
 		}
 		// Generates an image from a project folder
 		_, err = container.ImageBuildFromFolder()
 		if err != nil {
-			util.TraceToLog()
-			log.Printf("Error: %v", err.Error())
+						log.Printf("Error: %v", err.Error())
 			log.Printf(container.GetProblem())
 			return
 		}
@@ -552,8 +550,7 @@ binário gerado na primeira etapa é copiado para uma imagem nova, o que deixa a
 		// output to proceed
 		err = container.ContainerBuildFromImage()
 		if err != nil {
-			util.TraceToLog()
-			log.Printf("Error: %v", err.Error())
+						log.Printf("Error: %v", err.Error())
 			log.Printf(container.GetProblem())
 			return
 		}

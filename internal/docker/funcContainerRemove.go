@@ -29,7 +29,6 @@ func (e *ContainerBuilder) ContainerRemove(removeVolumes bool) (err error) {
 	if e.containerID == "" {
 		err = e.getIdByContainerName()
 		if err != nil {
-			util.TraceToLog()
 			return
 		}
 	}

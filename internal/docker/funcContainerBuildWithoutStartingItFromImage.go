@@ -3,7 +3,6 @@ package docker
 import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
-	"github.com/helmutkemper/util"
 	"log"
 	"strings"
 )
@@ -26,13 +25,11 @@ import (
 func (e *ContainerBuilder) ContainerBuildWithoutStartingItFromImage() (err error) {
 	err = e.verifyImageName()
 	if err != nil {
-		util.TraceToLog()
 		return
 	}
 
 	_, err = e.dockerSys.ImageFindIdByName(e.imageName)
 	if err != nil {
-		util.TraceToLog()
 		return
 	}
 
@@ -40,7 +37,6 @@ func (e *ContainerBuilder) ContainerBuildWithoutStartingItFromImage() (err error
 	if e.network != nil {
 		e.IPV4Address, netConfig, err = e.network.GetConfiguration()
 		if err != nil {
-			util.TraceToLog()
 			return
 		}
 	}
@@ -51,7 +47,6 @@ func (e *ContainerBuilder) ContainerBuildWithoutStartingItFromImage() (err error
 	originalImagePortlist, err = e.dockerSys.ImageListExposedPortsByName(e.imageName)
 
 	if err != nil {
-		util.TraceToLog()
 		return
 	}
 
@@ -80,14 +75,12 @@ func (e *ContainerBuilder) ContainerBuildWithoutStartingItFromImage() (err error
 			//comentado - nem sempre funciona verificar - início
 			//if pass == false {
 			//	err = errors.New("port " + portToOpen + " not found in image port list. port list: " + originalImagePortlistAsString)
-			//	util.TraceToLog()
-			//	return
+			//				//	return
 			//}
 			//comentado - nem sempre funciona verificar - fim
 
 			port, err = nat.NewPort("tcp", portToOpen)
 			if err != nil {
-				util.TraceToLog()
 				return
 			}
 
@@ -100,7 +93,6 @@ func (e *ContainerBuilder) ContainerBuildWithoutStartingItFromImage() (err error
 		for _, newPortLinkMap := range e.changePorts {
 			imagePort, err = nat.NewPort("tcp", newPortLinkMap.OldPort)
 			if err != nil {
-				util.TraceToLog()
 				return
 			}
 
@@ -114,13 +106,11 @@ func (e *ContainerBuilder) ContainerBuildWithoutStartingItFromImage() (err error
 			//
 			//if pass == false {
 			//	err = errors.New("port " + newPortLinkMap.OldPort + " not found in image port list. port list: " + originalImagePortlistAsString)
-			//	util.TraceToLog()
-			//	return
+			//				//	return
 			//}
 
 			newPort, err = nat.NewPort("tcp", newPortLinkMap.NewPort)
 			if err != nil {
-				util.TraceToLog()
 				return
 			}
 			portMap[imagePort] = []nat.PortBinding{{HostPort: newPort.Port()}}
@@ -168,7 +158,6 @@ func (e *ContainerBuilder) ContainerBuildWithoutStartingItFromImage() (err error
 		netConfig,
 	)
 	if err != nil {
-		util.TraceToLog()
 		return
 	}
 

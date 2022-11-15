@@ -49,7 +49,6 @@ func (e *ContainerBuilder) AddFailMatchFlagToFileLog(value, logDirectoryPath str
 
 	err = util.DirMake(logDirectoryPath)
 	if err != nil {
-		util.TraceToLog()
 		return
 	}
 

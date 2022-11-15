@@ -2,7 +2,6 @@ package docker
 
 import (
 	"fmt"
-	"github.com/helmutkemper/util"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -62,7 +61,6 @@ func ExampleContainerBuilder_AddPortToChange() {
 	err = container.AddFileOrFolderToLinkBetweenComputerHostAndContainer("./test/static", "/static")
 	if err != nil {
 		log.Printf("container.AddFileOrFolderToLinkBetweenComputerHostAndContainer().error: %v", err.Error())
-		util.TraceToLog()
 		panic(err)
 	}
 
@@ -71,7 +69,6 @@ func ExampleContainerBuilder_AddPortToChange() {
 	// Português: inicializa o objeto container
 	err = container.Init()
 	if err != nil {
-		util.TraceToLog()
 		panic(err)
 	}
 
@@ -80,7 +77,6 @@ func ExampleContainerBuilder_AddPortToChange() {
 	// Português: monta a nova imagem a partir do projeto git
 	_, err = container.ImageBuildFromServer()
 	if err != nil {
-		util.TraceToLog()
 		log.Printf("container.ImageBuildFromServer().error: %v", err.Error())
 		panic(err)
 	}
@@ -90,7 +86,6 @@ func ExampleContainerBuilder_AddPortToChange() {
 	// Português: monta o container a partir da imagem delete:latest
 	err = container.ContainerBuildAndStartFromImage()
 	if err != nil {
-		util.TraceToLog()
 		log.Printf("container.ContainerBuildAndStartFromImage().error: %v", err.Error())
 		panic(err)
 	}
@@ -105,7 +100,6 @@ func ExampleContainerBuilder_AddPortToChange() {
 	var resp *http.Response
 	resp, err = http.Get("http://localhost:3030/")
 	if err != nil {
-		util.TraceToLog()
 		log.Printf("http.Get().error: %v", err.Error())
 		panic(err)
 	}
@@ -113,7 +107,6 @@ func ExampleContainerBuilder_AddPortToChange() {
 	var body []byte
 	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		util.TraceToLog()
 		log.Printf("http.Get().error: %v", err.Error())
 		panic(err)
 	}

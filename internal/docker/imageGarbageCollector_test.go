@@ -3,7 +3,7 @@ package docker
 import (
 	"errors"
 	"github.com/docker/docker/api/types"
-	"github.com/helmutkemper/iotmaker.docker/util"
+	"github.com/helmutkemper/chaos/internal/util"
 )
 
 func ExampleDockerSystem_ImageGarbageCollector() {

@@ -38,14 +38,12 @@ func ExampleContainerBuilder_ContainerBuildAndStartFromImage() {
 	err = container.AddFileOrFolderToLinkBetweenComputerHostAndContainer("./test/static", "/static")
 	if err != nil {
 		log.Printf("container.AddFileOrFolderToLinkBetweenComputerHostAndContainer().error: %v", err.Error())
-		util.TraceToLog()
 		panic(err)
 	}
 
 	// inicialize container object
 	err = container.Init()
 	if err != nil {
-		util.TraceToLog()
 		panic(err)
 	}
 

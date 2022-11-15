@@ -27,6 +27,9 @@ func main() {
 
 	primordial.SetContainerName("delete")
 
+	problem := manager.Problem()
+	problem.FlagToFile()
+
 	err = manager.Init()
 	if err != nil {
 		log.Fatal(err)
