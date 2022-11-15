@@ -19,6 +19,9 @@ import (
 //
 //	Gerenciador de containers e imagens docker
 type ContainerBuilder struct {
+	buildFolder bool
+	buildServer bool
+
 	metadata                map[string]interface{}
 	problem                 string
 	csvValueSeparator       string

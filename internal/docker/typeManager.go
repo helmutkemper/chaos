@@ -9,9 +9,6 @@ import (
 type Manager struct {
 	docker  *DockerSystem
 	builder *ContainerBuilder
-
-	buildFolder bool
-	buildServer bool
 }
 
 func (e *Manager) New() (err error) {
@@ -41,7 +38,7 @@ func (e *Manager) Init() (err error) {
 		return
 	}
 
-	if !e.buildFolder && !e.buildServer && e.builder.imageName != "" {
+	if !(e.builder.buildFolder || e.builder.buildServer) && e.builder.imageName != "" {
 		err = e.builder.imagePull()
 		if err != nil {
 			err = fmt.Errorf("manager.Init().Builder.imagePull().Error: %v", err)
@@ -49,13 +46,13 @@ func (e *Manager) Init() (err error) {
 		}
 	}
 
-	if e.buildFolder {
+	if e.builder.buildFolder {
 		_, err = e.builder.ImageBuildFromFolder()
 		if err != nil {
 			err = fmt.Errorf("manager.Init().Builder.ImageBuildFromFolder().Error: %v", err)
 			return
 		}
-	} else if e.buildServer {
+	} else if e.builder.buildServer {
 		_, err = e.builder.ImageBuildFromServer()
 		if err != nil {
 			err = fmt.Errorf("manager.Init().Builder.ImageBuildFromServer().Error: %v", err)
@@ -504,7 +501,7 @@ type Primordial struct {
 //	   value: noma da imagem a ser baixada ou criada
 func (e *Primordial) SetImageName(value string) (err error) {
 	if !strings.Contains(value, ":") {
-		err = fmt.Errorf("primordial.SetImageName().error: image name must contain version tag. eg: mongo:latest")
+		err = fmt.Errorf("primordial.SetImageName().error: image name must contain version tag. eg: %v:latest", value)
 		return
 	}
 
@@ -533,7 +530,7 @@ func (e *Primordial) SetContainerName(value string) {
 
 func (e *Primordial) SetProject(path string) (err error) {
 	if strings.HasSuffix(path, ".git") {
-		e.buildServer = true
+		e.builder.buildServer = true
 
 		// SetGitCloneToBuild
 		//
@@ -600,7 +597,7 @@ func (e *Primordial) SetProject(path string) (err error) {
 
 	_, err = os.Stat(path)
 	if os.IsExist(err) {
-		e.buildFolder = true
+		e.builder.buildFolder = true
 
 		// SetBuildFolderPath
 		//

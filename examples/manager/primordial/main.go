@@ -20,7 +20,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = primordial.SetImageName("delete")
+	err = primordial.SetImageName("delete:latest")
 	if err != nil {
 		log.Fatal(err)
 	}
