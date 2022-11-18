@@ -11,7 +11,7 @@ type Primordial struct {
 // Create a docker network to be used in the chaos test
 //
 //	 Input:
-//	   name: network name
+//	    name: network name
 //			subnet: subnet value. eg. 10.0.0.0/16
 //			gateway: gateway value. eg. "10.0.0.1
 //
