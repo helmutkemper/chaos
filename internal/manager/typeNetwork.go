@@ -22,14 +22,14 @@ func (el *Network) New(manager *Manager) {
 //
 // Create a docker network to be used in the chaos test
 //
-//		Input:
-//		  name: network name
-//		  subnet: subnet value. eg. 10.0.0.0/16
-//		  gateway: gateway value. eg. "10.0.0.1
+//	 Input:
+//	   name: network name
+//			subnet: subnet value. eg. 10.0.0.0/16
+//			gateway: gateway value. eg. "10.0.0.1
 //
-//	 Notes:
+//		Notes:
 //	   * If there is already a network with the same name and the same configuration, nothing will be done;
-//	   * If a network with the same name and different configuration already exists, the network will be deleted and a new network created.
+//		  * If a network with the same name and different configuration already exists, the network will be deleted and a new network created.
 func (el *Network) NetworkCreate(name, subnet, gateway string) (err error) {
 	el.networkName = name
 
