@@ -5,6 +5,51 @@ import (
 	"github.com/helmutkemper/chaos/internal/builder"
 )
 
+//
+//    +-----------+          +--------------+
+//    |  manager  +------+---+  primordial  |
+//    +-----------+      |   +--------------+
+//                       |
+//                       |   +-------------+
+//                       +---+  container  |
+//                       |   +-------------+
+//                       |
+//                       |   +---------+
+//                       +---+  basic  |
+//                           +---------+
+//
+//    +--------------+       +--------------------+
+//    |  primordial  +---+---+  garbage colector  |
+//    +--------------+   |   +--------------------+
+//                       |
+//                       |   +------------------+
+//                       +---+  create network  |
+//                           +------------------+
+//
+//    +-------------+       +--------------+
+//    |  container  +---+---+  from image  +---+--- ports()
+//    +-------------+   |   +--------------+   |
+//                      |                      +--- volumes()
+//                      |                      |
+//                      |                      +---
+//                      |
+//                      |
+//                      |
+//                      |
+//                      |   +---------------+
+//                      +---+  from folder  |
+//                      |   +---------------+
+//                      |
+//                      |   +---------------+
+//                      +---+  from server  |
+//                          +---------------+
+//
+//
+//
+//
+//
+//
+
 type dockerNetwork struct {
 	generator   *builder.NextNetworkAutoConfiguration
 	networkID   string
@@ -44,3 +89,20 @@ func (el *Manager) ContainerFromImage() (containerFromImage *ContainerFromImage)
 	containerFromImage.manager = el
 	return
 }
+
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//

@@ -87,6 +87,7 @@ func (el *DockerSystem) ContainerCreateWithConfig(
 	containerNetwork *network.NetworkingConfig,
 ) (
 	containerID string,
+	warnings []string,
 	err error,
 ) {
 
@@ -94,14 +95,6 @@ func (el *DockerSystem) ContainerCreateWithConfig(
 
 	if len(el.container) == 0 {
 		el.container = make(map[string]container.ContainerCreateCreatedBody)
-	}
-
-	if configuration != nil && configuration.Healthcheck == nil {
-		configuration.Healthcheck = el.healthcheck
-	}
-
-	if configuration != nil && configuration.OnBuild == nil {
-		configuration.OnBuild = el.onBuild
 	}
 
 	resp, err = el.cli.ContainerCreate(
@@ -122,6 +115,8 @@ func (el *DockerSystem) ContainerCreateWithConfig(
 	if err != nil {
 		return
 	}
+
+	warnings = resp.Warnings
 
 	el.container[resp.ID] = resp
 	containerID = resp.ID

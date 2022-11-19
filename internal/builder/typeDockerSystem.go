@@ -19,5 +19,5 @@ type DockerSystem struct {
 	container        map[string]container.ContainerCreateCreatedBody
 	networkGenerator map[string]*NextNetworkAutoConfiguration
 	healthcheck      *container.HealthConfig
-	onBuild          []string
+	Config           *container.Config
 }

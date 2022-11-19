@@ -49,5 +49,5 @@ package builder
 //
 // https://docs.docker.com/engine/reference/builder/#onbuild
 func (el *DockerSystem) SetOnBuild(onBuild []string) {
-	el.onBuild = onBuild
+	el.Config.OnBuild = onBuild
 }

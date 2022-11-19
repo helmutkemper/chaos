@@ -30,3 +30,22 @@ func (el *Primordial) NetworkCreate(name, subnet, gateway string) (ref *Primordi
 
 	return el
 }
+
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
