@@ -8,14 +8,11 @@ import (
 
 type Network struct {
 	manager *Manager
-
-	generator   *builder.NextNetworkAutoConfiguration
-	networkID   string
-	networkName string
 }
 
 func (el *Network) New(manager *Manager) {
 	el.manager = manager
+	el.manager.network = new(dockerNetwork)
 }
 
 // NetworkCreate
@@ -31,25 +28,25 @@ func (el *Network) New(manager *Manager) {
 //	  * If there is already a network with the same name and the same configuration, nothing will be done;
 //	  * If a network with the same name and different configuration already exists, the network will be deleted and a new network created.
 func (el *Network) NetworkCreate(name, subnet, gateway string) (err error) {
-	el.networkName = name
+	el.manager.network.networkName = name
 
 	var networkList []types.NetworkResource
-	networkList, err = el.manager.DockerSys.NetworkList()
+	networkList, err = el.manager.DockerSys[0].NetworkList()
 	if err != nil {
 		return
 	}
 
 	for _, networkData := range networkList {
 		if networkData.Name == name {
-			el.networkID = networkData.ID
+			el.manager.network.networkID = networkData.ID
 
 			var data types.NetworkResource
-			if data, err = el.manager.DockerSys.NetworkInspect(networkData.ID); err != nil {
+			if data, err = el.manager.DockerSys[0].NetworkInspect(networkData.ID); err != nil {
 				err = fmt.Errorf("network.NetworkCreate().NetworkInspect().error: %v", err)
 				return
 			}
 			if data.IPAM.Config[0].Subnet != subnet || data.IPAM.Config[0].Gateway != gateway {
-				if err = el.manager.DockerSys.NetworkRemove(networkData.ID); err != nil {
+				if err = el.manager.DockerSys[0].NetworkRemove(networkData.ID); err != nil {
 					err = fmt.Errorf("network.NetworkCreate().NetworkRemove().error: %v", err)
 					return
 				}
@@ -57,11 +54,11 @@ func (el *Network) NetworkCreate(name, subnet, gateway string) (err error) {
 				break
 			}
 
-			el.generator = el.manager.DockerSys.NetworkGetGenerator(name)
+			el.manager.network.generator = el.manager.DockerSys[0].NetworkGetGenerator(name)
 			return
 		}
 	}
 
-	el.networkID, el.generator, err = el.manager.DockerSys.NetworkCreate(name, builder.KNetworkDriveBridge, "local", subnet, gateway)
+	el.manager.network.networkID, el.manager.network.generator, err = el.manager.DockerSys[0].NetworkCreate(name, builder.KNetworkDriveBridge, "local", subnet, gateway)
 	return
 }

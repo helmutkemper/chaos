@@ -5,15 +5,28 @@ import (
 	"github.com/helmutkemper/chaos/internal/builder"
 )
 
-type Manager struct {
-	DockerSys *builder.DockerSystem
+type dockerNetwork struct {
+	generator   *builder.NextNetworkAutoConfiguration
+	networkID   string
+	networkName string
 }
 
-func (el *Manager) New() (err error) {
-	el.DockerSys = new(builder.DockerSystem)
-	err = el.DockerSys.Init()
+type Manager struct {
+	network *dockerNetwork
+
+	DockerSys []*builder.DockerSystem
+	ErrorCh   chan error
+}
+
+func (el *Manager) New(errorCh chan error) {
+	el.ErrorCh = errorCh
+
+	var err error
+	el.DockerSys = make([]*builder.DockerSystem, 1)
+	el.DockerSys[0] = new(builder.DockerSystem)
+	err = el.DockerSys[0].Init()
 	if err != nil {
-		err = fmt.Errorf("chaos.Manager.New().error: %v. Usually this error occurs when docker is not running", err)
+		el.ErrorCh <- fmt.Errorf("chaos.Manager.New().error: %v. Usually this error occurs when docker is not running", err)
 		return
 	}
 
@@ -22,6 +35,12 @@ func (el *Manager) New() (err error) {
 
 func (el *Manager) Primordial() (primordial *Primordial) {
 	primordial = new(Primordial)
-	primordial.Manager = el
+	primordial.manager = el
+	return
+}
+
+func (el *Manager) ContainerFromImage() (containerFromImage *ContainerFromImage) {
+	containerFromImage = new(ContainerFromImage)
+	containerFromImage.manager = el
 	return
 }
