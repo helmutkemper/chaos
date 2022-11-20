@@ -3,6 +3,7 @@ package manager
 import (
 	"fmt"
 	"github.com/helmutkemper/chaos/internal/builder"
+	"time"
 )
 
 //
@@ -59,6 +60,8 @@ type dockerNetwork struct {
 type Manager struct {
 	network *dockerNetwork
 
+	Ticker    *time.Ticker
+	Id        []string
 	DockerSys []*builder.DockerSystem
 	ErrorCh   chan error
 }
@@ -67,6 +70,7 @@ func (el *Manager) New(errorCh chan error) {
 	el.ErrorCh = errorCh
 
 	var err error
+	el.Id = make([]string, 0)
 	el.DockerSys = make([]*builder.DockerSystem, 1)
 	el.DockerSys[0] = new(builder.DockerSystem)
 	err = el.DockerSys[0].Init()

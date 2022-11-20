@@ -1,11 +1,15 @@
 package manager
 
 import (
+	"encoding/csv"
 	"fmt"
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/mount"
 	networkTypes "github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
 	"github.com/helmutkemper/chaos/internal/builder"
+	"io/fs"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -34,6 +38,7 @@ type ContainerFromImage struct {
 	imageName     string
 	containerName string
 	copies        int
+	csvPath       string
 }
 
 func (el *ContainerFromImage) New(manager *Manager) {
@@ -352,6 +357,159 @@ func (el *ContainerFromImage) Healthcheck(interval, timeout, startPeriod time.Du
 		Retries:     retries,
 	}
 
+	//Healthcheck(1*time.Second, 1*time.Second, 1*time.Second, 5, "CMD-SHELL", "mongod --shutdown || exit 1").
+
+	return el
+}
+
+func (el *ContainerFromImage) SaveStatistics(path string) (ref *ContainerFromImage) {
+	el.csvPath = path
+	return el
+}
+
+func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
+	var err error
+	for i := 0; i != el.copies; i += 1 {
+		err = el.manager.DockerSys[i].ContainerStart(el.manager.Id[i])
+		if err != nil {
+			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerStart().error: %v", i, err)
+			return el
+		}
+	}
+
+	if el.csvPath == "" {
+		return
+	}
+
+	el.manager.Ticker = time.NewTicker(2 * time.Second)
+	go func() {
+		var stats types.Stats
+		var line [][]string
+		var writer *csv.Writer
+
+		var file = make([]*os.File, el.copies)
+		for i := 0; i != el.copies; i += 1 {
+			file[i], err = os.OpenFile(filepath.Join(el.csvPath, fmt.Sprintf("stats.%v.%v.csv", el.containerName, i)), os.O_CREATE|os.O_APPEND|os.O_WRONLY, fs.ModePerm)
+		}
+
+		defer func() {
+			for i := 0; i != el.copies; i += 1 {
+				_ = file[i].Close()
+			}
+		}()
+
+		line = [][]string{{
+			"read",
+			"pre read",
+
+			"pids - current (linux)",
+			"pids - limit (linux)",
+
+			"num of process (windows)",
+
+			"storage - read count (windows)",
+			"storage - write count (windows)",
+
+			"cpu - online",
+			"cpu - system usage",
+			"cpu - usage in user mode",
+			"cpu - usage in kernel mode",
+			"cpu - total usage",
+			"cpu - throttled time",
+			"cpu - throttled periods",
+			"cpu - throttling periods",
+
+			"pre cpu - online",
+			"pre cpu - system usage",
+			"pre cpu - usage in user mode",
+			"pre cpu - usage in kernel mode",
+			"pre cpu - total usage",
+			"pre cpu - throttled time",
+			"pre cpu - throttled periods",
+			"pre cpu - throttling periods",
+
+			"memory - limit",
+			"memory - commit peak",
+			"memory - commit",
+			"memory - fail cnt",
+			"memory - usage",
+			"memory - max usage",
+			"memory - private working set",
+		}}
+
+		for i := 0; i != el.copies; i += 1 {
+			writer = csv.NewWriter(file[i])
+			err = writer.WriteAll(line)
+			if err != nil {
+				el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().WriteAll(0).error: %v", i, err)
+				return
+			}
+		}
+
+		for {
+			select {
+			case <-el.manager.Ticker.C:
+				for i := 0; i != el.copies; i += 1 {
+
+					stats, err = el.manager.DockerSys[i].ContainerStatisticsOneShot(el.manager.Id[i])
+					if err != nil {
+						el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerInspect().error: %v", i, err)
+						continue
+					}
+
+					line = [][]string{{
+						strconv.FormatInt(int64(stats.Read.Nanosecond()), 10),
+						strconv.FormatInt(int64(stats.PreRead.Nanosecond()), 10),
+
+						//linux
+						strconv.FormatInt(int64(stats.PidsStats.Current), 10),
+						strconv.FormatInt(int64(stats.PidsStats.Limit), 10),
+
+						//windows
+						strconv.FormatInt(int64(stats.NumProcs), 10),
+						strconv.FormatInt(int64(stats.StorageStats.ReadCountNormalized), 10),
+						strconv.FormatInt(int64(stats.StorageStats.WriteCountNormalized), 10),
+
+						// Shared stats
+						strconv.FormatUint(uint64(stats.CPUStats.OnlineCPUs), 10),
+						strconv.FormatUint(stats.CPUStats.SystemUsage, 10),
+						strconv.FormatUint(stats.CPUStats.CPUUsage.UsageInUsermode, 10),
+						strconv.FormatUint(stats.CPUStats.CPUUsage.UsageInKernelmode, 10),
+						strconv.FormatUint(stats.CPUStats.CPUUsage.TotalUsage, 10),
+						strconv.FormatUint(stats.CPUStats.ThrottlingData.ThrottledTime, 10),
+						strconv.FormatUint(stats.CPUStats.ThrottlingData.ThrottledPeriods, 10),
+						strconv.FormatUint(stats.CPUStats.ThrottlingData.Periods, 10),
+
+						strconv.FormatUint(uint64(stats.PreCPUStats.OnlineCPUs), 10),
+						strconv.FormatUint(stats.PreCPUStats.SystemUsage, 10),
+						strconv.FormatUint(stats.PreCPUStats.CPUUsage.UsageInUsermode, 10),
+						strconv.FormatUint(stats.PreCPUStats.CPUUsage.UsageInKernelmode, 10),
+						strconv.FormatUint(stats.PreCPUStats.CPUUsage.TotalUsage, 10),
+						strconv.FormatUint(stats.PreCPUStats.ThrottlingData.ThrottledTime, 10),
+						strconv.FormatUint(stats.PreCPUStats.ThrottlingData.ThrottledPeriods, 10),
+						strconv.FormatUint(stats.PreCPUStats.ThrottlingData.Periods, 10),
+
+						strconv.FormatUint(stats.MemoryStats.Limit, 10),
+						strconv.FormatUint(stats.MemoryStats.CommitPeak, 10),
+						strconv.FormatUint(stats.MemoryStats.Commit, 10),
+						strconv.FormatUint(stats.MemoryStats.Failcnt, 10),
+						strconv.FormatUint(stats.MemoryStats.Usage, 10),
+						strconv.FormatUint(stats.MemoryStats.MaxUsage, 10),
+						strconv.FormatUint(stats.MemoryStats.PrivateWorkingSet, 10),
+					}}
+
+					writer = csv.NewWriter(file[i])
+					err = writer.WriteAll(line)
+					if err != nil {
+						el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().WriteAll(1).error: %v", i, err)
+						return
+					}
+
+				}
+			}
+		}
+	}()
+
 	return el
 }
 
@@ -391,7 +549,7 @@ func (el *ContainerFromImage) Create(imageName, containerName string, copies int
 			ipAddress, netConfig, err = el.manager.network.generator.GetNext()
 			if err != nil {
 				el.manager.ErrorCh <- fmt.Errorf("container.network().GetNext().error: %v", err)
-				return
+				return el
 			}
 			el.IPV4Address = append(el.IPV4Address, ipAddress)
 		}
@@ -423,9 +581,9 @@ func (el *ContainerFromImage) Create(imageName, containerName string, copies int
 		config.Image = imageName
 
 		// create the container, link container and network, but, don't start the container
-		var containerID string
 		var warnings []string
-		containerID, warnings, err = el.manager.DockerSys[i].ContainerCreateWithConfig(
+		var id string
+		id, warnings, err = el.manager.DockerSys[i].ContainerCreateWithConfig(
 			config,
 			containerName+"_"+strconv.FormatInt(int64(i), 10),
 			builder.KRestartPolicyNo,
@@ -435,20 +593,16 @@ func (el *ContainerFromImage) Create(imageName, containerName string, copies int
 		)
 		if err != nil {
 			el.manager.ErrorCh <- fmt.Errorf("container[%v].ContainerCreate().error: %v", i, err)
-			return
+			return el
 		}
+
+		// id de todos os containers criados para a função start()
+		el.manager.Id = append(el.manager.Id, id)
 
 		//todo: fazer warnings - não deve ser erro
 		if len(warnings) != 0 {
 			el.manager.ErrorCh <- fmt.Errorf("container[%v].ContainerCreate().warnings: %v", i, strings.Join(warnings, "; "))
-			return
-		}
-
-		// fixme: apagar start
-		err = el.manager.DockerSys[i].ContainerStart(containerID)
-		if err != nil {
-			el.manager.ErrorCh <- fmt.Errorf("container[%v].ContainerStart().error: %v", i, err)
-			return
+			return el
 		}
 	}
 
