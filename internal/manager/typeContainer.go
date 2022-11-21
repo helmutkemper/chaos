@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"github.com/docker/docker/api/types"
@@ -8,7 +9,10 @@ import (
 	networkTypes "github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
 	"github.com/helmutkemper/chaos/internal/builder"
+	"github.com/helmutkemper/util"
 	"io/fs"
+	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -34,11 +38,14 @@ type ContainerFromImage struct {
 
 	manager *Manager
 
-	imageId       string
-	imageName     string
-	containerName string
-	copies        int
-	csvPath       string
+	imageId          string
+	imageName        string
+	containerName    string
+	copies           int
+	csvPath          string
+	failPath         string
+	failFlag         []string
+	failLogsLastSize []int
 }
 
 func (el *ContainerFromImage) New(manager *Manager) {
@@ -362,8 +369,51 @@ func (el *ContainerFromImage) Healthcheck(interval, timeout, startPeriod time.Du
 	return el
 }
 
+// SaveStatistics
+//
+// Salva um arquivo com as estatísticas de consumo de memória e processamento do container durante os testes
+//
+//	| read      | pre read  | pids - current (linux) | pids - limit (linux) | num of process (windows) | storage - read count (windows) | storage - write count (windows) | cpu - online | cpu - system usage | cpu - usage in user mode | cpu - usage in kernel mode | cpu - total usage | cpu - throttled time | cpu - throttled periods | cpu - throttling periods | pre cpu - online | pre cpu - system usage | pre cpu - usage in user mode | pre cpu - usage in kernel mode | pre cpu - total usage | pre cpu - throttled time | pre cpu - throttled periods | pre cpu - throttling periods | memory - limit | memory - commit peak | memory - commit | memory - fail cnt | memory - usage | memory - max usage | memory - private working set |
+//	|-----------|-----------|------------------------|----------------------|--------------------------|--------------------------------|---------------------------------|--------------|--------------------|--------------------------|----------------------------|-------------------|----------------------|-------------------------|--------------------------|------------------|------------------------|------------------------------|--------------------------------|-----------------------|--------------------------|-----------------------------|------------------------------|----------------|----------------------|-----------------|-------------------|----------------|--------------------|------------------------------|
+//	| 270355545 | 267925794 | 36                     | -1                   | 0                        | 0                              | 0                               | 8            | 128396690000000    | 1333036000               | 273231000                  | 1606267000        | 0                    | 0                       | 0                        | 8                | 128388860000000        | 1122134000                   | 188896000                      | 1311030000            | 0                        | 0                           | 0                            | 12544057344    | 0                    | 0               | 0                 | 67489792       | 0                  | 0                            |
+//	| 315625547 | 312487880 | 36                     | -1                   | 0                        | 0                              | 0                               | 8            | 128443910000000    | 2428358000               | 705437000                  | 3133796000        | 0                    | 0                       | 0                        | 8                | 128436100000000        | 2261894000                   | 623029000                      | 2884924000            | 0                        | 0                           | 0                            | 12544057344    | 0                    | 0               | 0                 | 74043392       | 0                  | 0                            |
+//	| 331017884 | 328716175 | 37                     | -1                   | 0                        | 0                              | 0                               | 8            | 128490870000000    | 3388019000               | 1217971000                 | 4605991000        | 0                    | 0                       | 0                        | 8                | 128483010000000        | 3235788000                   | 1129258000                     | 4365046000            | 0                        | 0                           | 0                            | 12544057344    | 0                    | 0               | 0                 | 79872000       | 0                  | 0                            |
+//	| 375934470 | 373538303 | 37                     | -1                   | 0                        | 0                              | 0                               | 8            | 128538150000000    | 4373956000               | 1736955000                 | 6110912000        | 0                    | 0                       | 0                        | 8                | 128530300000000        | 4209072000                   | 1648809000                     | 5857882000            | 0                        | 0                           | 0                            | 12544057344    | 0                    | 0               | 0                 | 85491712       | 0                  | 0                            |
+//	| 392846000 | 389797833 | 37                     | -1                   | 0                        | 0                              | 0                               | 8            | 128585060000000    | 5392002000               | 2341771000                 | 7733774000        | 0                    | 0                       | 0                        | 8                | 128577290000000        | 5213464000                   | 2236247000                     | 7449711000            | 0                        | 0                           | 0                            | 12544057344    | 0                    | 0               | 0                 | 91275264       | 0                  | 0                            |
+//	| 438223378 | 435128169 | 36                     | -1                   | 0                        | 0                              | 0                               | 8            | 128632160000000    | 6476036000               | 2913993000                 | 9390029000        | 0                    | 0                       | 0                        | 8                | 128624350000000        | 6290689000                   | 2803815000                     | 9094505000            | 0                        | 0                           | 0                            | 12544057344    | 0                    | 0               | 0                 | 97112064       | 0                  | 0                            |
 func (el *ContainerFromImage) SaveStatistics(path string) (ref *ContainerFromImage) {
+	var err error
+	var fileInfo os.FileInfo
+	if fileInfo, err = os.Stat(path); err != nil {
+		if err = os.MkdirAll(path, fs.ModePerm); err != nil {
+			el.manager.ErrorCh <- fmt.Errorf("container.SaveStatistics().MkdirAll().error: %v", "directory not found")
+			return el
+		}
+	} else if !fileInfo.IsDir() {
+		el.manager.ErrorCh <- fmt.Errorf("container.SaveStatistics().error: %v", "directory not found")
+		return el
+	}
+
 	el.csvPath = path
+	return el
+}
+
+func (el *ContainerFromImage) FailFlag(path string, flags ...string) (ref *ContainerFromImage) {
+	var err error
+	var fileInfo os.FileInfo
+	if fileInfo, err = os.Stat(path); err != nil {
+		if err = os.MkdirAll(path, fs.ModePerm); err != nil {
+			el.manager.ErrorCh <- fmt.Errorf("container.FailFlag().MkdirAll().error: %v", "directory not found")
+			return el
+		}
+	} else if !fileInfo.IsDir() {
+		el.manager.ErrorCh <- fmt.Errorf("container.FailFlag().error: %v", "directory not found")
+		return el
+	}
+
+	el.failPath = path
+	el.failFlag = flags
+
 	return el
 }
 
@@ -381,7 +431,99 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 		return
 	}
 
-	el.manager.Ticker = time.NewTicker(2 * time.Second)
+	el.statsThread()
+	el.failFlagThread()
+
+	return el
+}
+
+func (el *ContainerFromImage) failFlagThread() {
+	var err error
+	var logs []byte
+	var lineList [][]byte
+	el.manager.TickerFail = time.NewTicker(10 * time.Second)
+	go func() {
+		for {
+			select {
+			case <-el.manager.TickerFail.C:
+				for i := 0; i != el.copies; i += 1 {
+
+					logs, err = el.manager.DockerSys[i].ContainerLogs(el.manager.Id[i])
+					if err != nil {
+						el.manager.ErrorCh <- fmt.Errorf("container[%v].failFlagThread().ContainerLogs().error: %v", i, err)
+						return
+					}
+
+					lineList = el.logsCleaner(logs, i)
+					el.logsSearchAndReplaceIntoText(i, &logs, lineList, el.failPath, el.failFlag)
+
+				}
+			}
+		}
+	}()
+}
+
+// logsCleaner
+//
+// English:
+//
+//	Clear blank lines of the container's standard output
+//
+//	Input:
+//	  logs: container's standard output
+//
+//	Output:
+//	  logsLine: List of lines of the container's standard output
+func (el *ContainerFromImage) logsCleaner(logs []byte, key int) (logsLine [][]byte) {
+
+	size := len(logs) - 1
+
+	// faz o log só lê a parte mais recente do mesmo
+	logs = logs[el.failLogsLastSize[key]:]
+	el.failLogsLastSize[key] = size
+
+	logs = bytes.ReplaceAll(logs, []byte("\r"), []byte(""))
+	return bytes.Split(logs, []byte("\n"))
+}
+
+func (el *ContainerFromImage) logsSearchAndReplaceIntoText(key int, logs *[]byte, lineList [][]byte, pathLog string, failFlags []string) (line []byte, found bool) {
+	var err error
+	var dirList []fs.FileInfo
+
+	for logLine := len(lineList) - 1; logLine >= 0; logLine -= 1 {
+
+		for filterLine := 0; filterLine != len(failFlags); filterLine += 1 {
+			line = lineList[logLine]
+			if bytes.Contains(line, []byte(failFlags[filterLine])) == true {
+
+				if pathLog != "" {
+					dirList, err = ioutil.ReadDir(pathLog)
+					if err != nil {
+						log.Printf("ioutil.ReadDir().error: %v", err.Error())
+						util.TraceToLog()
+						return
+					}
+					var totalOfFiles = strconv.Itoa(len(dirList))
+					err = ioutil.WriteFile(filepath.Join(pathLog, el.containerName+"_"+strconv.FormatInt(int64(key), 10)+"."+totalOfFiles+".fail.log"), *logs, fs.ModePerm)
+					if err != nil {
+						log.Printf("ioutil.WriteFile().error: %v", err.Error())
+						util.TraceToLog()
+						return
+					}
+				}
+
+				found = true
+				return
+			}
+		}
+	}
+
+	return
+}
+
+func (el *ContainerFromImage) statsThread() {
+	var err error
+	el.manager.TickerStats = time.NewTicker(10 * time.Second)
 	go func() {
 		var stats types.Stats
 		var line [][]string
@@ -390,6 +532,10 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 		var file = make([]*os.File, el.copies)
 		for i := 0; i != el.copies; i += 1 {
 			file[i], err = os.OpenFile(filepath.Join(el.csvPath, fmt.Sprintf("stats.%v.%v.csv", el.containerName, i)), os.O_CREATE|os.O_APPEND|os.O_WRONLY, fs.ModePerm)
+			if err != nil {
+				el.manager.ErrorCh <- fmt.Errorf("container[%v].statsThread().OpenFile().error: %v", i, err)
+				return
+			}
 		}
 
 		defer func() {
@@ -441,19 +587,19 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 			writer = csv.NewWriter(file[i])
 			err = writer.WriteAll(line)
 			if err != nil {
-				el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().WriteAll(0).error: %v", i, err)
+				el.manager.ErrorCh <- fmt.Errorf("container[%v].statsThread().WriteAll(0).error: %v", i, err)
 				return
 			}
 		}
 
 		for {
 			select {
-			case <-el.manager.Ticker.C:
+			case <-el.manager.TickerStats.C:
 				for i := 0; i != el.copies; i += 1 {
 
 					stats, err = el.manager.DockerSys[i].ContainerStatisticsOneShot(el.manager.Id[i])
 					if err != nil {
-						el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerInspect().error: %v", i, err)
+						el.manager.ErrorCh <- fmt.Errorf("container[%v].statsThread().ContainerInspect().error: %v", i, err)
 						continue
 					}
 
@@ -501,7 +647,7 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 					writer = csv.NewWriter(file[i])
 					err = writer.WriteAll(line)
 					if err != nil {
-						el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().WriteAll(1).error: %v", i, err)
+						el.manager.ErrorCh <- fmt.Errorf("container[%v].statsThread().WriteAll(1).error: %v", i, err)
 						return
 					}
 
@@ -509,8 +655,6 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 			}
 		}
 	}()
-
-	return el
 }
 
 func (el *ContainerFromImage) Create(imageName, containerName string, copies int) (ref *ContainerFromImage) {
@@ -520,6 +664,7 @@ func (el *ContainerFromImage) Create(imageName, containerName string, copies int
 		return el
 	}
 
+	el.failLogsLastSize = make([]int, copies)
 	// adjust image name to have version tag
 	el.imageName = el.manager.DockerSys[0].AdjustImageName(imageName)
 	el.containerName = containerName

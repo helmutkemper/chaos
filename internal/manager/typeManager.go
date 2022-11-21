@@ -60,10 +60,11 @@ type dockerNetwork struct {
 type Manager struct {
 	network *dockerNetwork
 
-	Ticker    *time.Ticker
-	Id        []string
-	DockerSys []*builder.DockerSystem
-	ErrorCh   chan error
+	TickerStats *time.Ticker
+	TickerFail  *time.Ticker
+	Id          []string
+	DockerSys   []*builder.DockerSystem
+	ErrorCh     chan error
 }
 
 func (el *Manager) New(errorCh chan error) {
