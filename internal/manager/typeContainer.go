@@ -22,7 +22,7 @@ import (
 	dockerContainer "github.com/docker/docker/api/types/container"
 )
 
-type container struct {
+type containerCommon struct {
 	IPV4Address []string
 
 	//port inside container and host computer port
@@ -34,7 +34,7 @@ type container struct {
 }
 
 type ContainerFromImage struct {
-	container
+	containerCommon
 
 	manager *Manager
 
