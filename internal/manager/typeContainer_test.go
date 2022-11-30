@@ -28,7 +28,7 @@ func TestContainerFromImage_Primordial(t *testing.T) {
 	//  FailFlag("../../bugs", "Multi threading initialized").
 	//  Ports("tcp", 27017, 27016, 27015, 27014).
 	//  Volumes("/data/db", "../../internal/builder/test/data0", "../../internal/builder/test/data1", "../../internal/builder/test/data2").
-	//  EnvironmentVar("--host 0.0.0.0").
+	//  EnvironmentVar([]string{"--host 0.0.0.0"}).
 	//  Create("delete_mongo", 3).
 	//  Start()
 
@@ -62,6 +62,7 @@ func TestContainerFromImage_Primordial(t *testing.T) {
 				"BARCO_ORDINAL=2",
 			},
 		).
+		FailFlag("../../bugs", "\"fatal\"").
 		ReplaceBeforeBuild("/Dockerfile", "/Users/kemper/go/projetos/barcocopy/internal/test/chaos/simpleRestart/Dockerfile").
 		Create("delete_barco", 3).
 		Start()

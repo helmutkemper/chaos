@@ -55,6 +55,7 @@ type containerCommon struct {
 	failLogsLastSize    []int
 
 	environment [][]string
+	testTimeout time.Duration
 
 	makeDefaultDockerfile       bool
 	makeDefaultDockerfileExtras bool
@@ -449,6 +450,11 @@ func (el *ContainerFromImage) ReplaceBeforeBuild(dst, src string) (ref *Containe
 	return el
 }
 
+func (el *ContainerFromImage) TestDuration(timeout time.Duration) (ref *ContainerFromImage) {
+	el.testTimeout = timeout
+	return el
+}
+
 func (el *ContainerFromImage) FailFlag(path string, flags ...string) (ref *ContainerFromImage) {
 	var err error
 	var fileInfo os.FileInfo
@@ -470,6 +476,7 @@ func (el *ContainerFromImage) FailFlag(path string, flags ...string) (ref *Conta
 
 func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 	var err error
+
 	for i := 0; i != el.copies; i += 1 {
 		err = el.manager.DockerSys[i].ContainerStart(el.manager.Id[i])
 		if err != nil {
@@ -492,12 +499,25 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 		}
 	}
 
+	el.failFlagThread()
+
 	if el.csvPath == "" {
 		return
 	}
 
 	el.statsThread()
-	el.failFlagThread()
+
+	if el.testTimeout != 0 {
+		var timeout = time.NewTimer(el.testTimeout)
+		go func() {
+			select {
+			case <-timeout.C:
+				el.manager.Done <- struct{}{}
+			}
+		}()
+	}
+
+	<-el.manager.Done
 
 	return el
 }
@@ -595,7 +615,9 @@ func (el *ContainerFromImage) statsThread() {
 
 		var file = make([]*os.File, el.copies)
 		for i := 0; i != el.copies; i += 1 {
-			file[i], err = os.OpenFile(filepath.Join(el.csvPath, fmt.Sprintf("stats.%v.%v.csv", el.containerName, i)), os.O_CREATE|os.O_APPEND|os.O_WRONLY, fs.ModePerm)
+			var filePath = filepath.Join(el.csvPath, fmt.Sprintf("stats.%v.%v.csv", el.containerName, i))
+			_ = os.Remove(filePath)
+			file[i], err = os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, fs.ModePerm)
 			if err != nil {
 				el.manager.ErrorCh <- fmt.Errorf("container[%v].statsThread().OpenFile().error: %v", i, err)
 				return
@@ -609,6 +631,8 @@ func (el *ContainerFromImage) statsThread() {
 		}()
 
 		line = [][]string{{
+			"time",
+
 			"read",
 			"pre read",
 
@@ -668,6 +692,8 @@ func (el *ContainerFromImage) statsThread() {
 					}
 
 					line = [][]string{{
+						time.Now().Format("2006-01-02 15:04:05"),
+
 						strconv.FormatInt(int64(stats.Read.Nanosecond()), 10),
 						strconv.FormatInt(int64(stats.PreRead.Nanosecond()), 10),
 
