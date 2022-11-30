@@ -882,6 +882,8 @@ func (el *ContainerFromImage) mapContainerPorts(iCopy int) (portConfig nat.PortM
 // project image build
 func (el *ContainerFromImage) imageBuild() (err error) {
 	switch el.command {
+	case "fromGit":
+
 	case "fromFolder":
 		if el.buildPath == "" {
 			err = fmt.Errorf("set build folder path first")
