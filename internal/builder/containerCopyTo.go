@@ -5,6 +5,9 @@ import (
 	"io"
 )
 
+// ContainerCopyTo
+//
+// Copy to host from container
 func (el *DockerSystem) ContainerCopyTo(
 	containerID string,
 	destinationPath string,

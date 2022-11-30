@@ -2,7 +2,9 @@ package manager
 
 import (
 	"fmt"
+	"github.com/docker/docker/api/types"
 	"github.com/helmutkemper/chaos/internal/builder"
+	"strings"
 	"time"
 )
 
@@ -60,11 +62,12 @@ type dockerNetwork struct {
 type Manager struct {
 	network *dockerNetwork
 
-	TickerStats *time.Ticker
-	TickerFail  *time.Ticker
-	Id          []string
-	DockerSys   []*builder.DockerSystem
-	ErrorCh     chan error
+	TickerStats       *time.Ticker
+	TickerFail        *time.Ticker
+	Id                []string
+	DockerSys         []*builder.DockerSystem
+	ErrorCh           chan error
+	ImageBuildOptions types.ImageBuildOptions
 }
 
 func (el *Manager) New(errorCh chan error) {
@@ -89,9 +92,28 @@ func (el *Manager) Primordial() (primordial *Primordial) {
 	return
 }
 
-func (el *Manager) ContainerFromImage() (containerFromImage *ContainerFromImage) {
+func (el *Manager) ContainerFromImage(imageName string) (containerFromImage *ContainerFromImage) {
+	if !strings.Contains(imageName, "delete") { //todo: function?
+		imageName = "delete_" + imageName
+	}
+
 	containerFromImage = new(ContainerFromImage)
 	containerFromImage.manager = el
+	containerFromImage.imageName = imageName
+	containerFromImage.command = "fromImage" //fixme: contante
+	return
+}
+
+func (el *Manager) ContainerFromFolder(imageName, buildPath string) (containerFromImage *ContainerFromImage) {
+	if !strings.Contains(imageName, "delete") { //todo: function?
+		imageName = "delete_" + imageName
+	}
+
+	containerFromImage = new(ContainerFromImage)
+	containerFromImage.manager = el
+	containerFromImage.buildPath = buildPath
+	containerFromImage.imageName = imageName
+	containerFromImage.command = "fromFolder" //fixme: contante
 	return
 }
 

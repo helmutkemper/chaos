@@ -3,13 +3,15 @@ package manager
 import (
 	"bytes"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/mount"
 	networkTypes "github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
 	"github.com/helmutkemper/chaos/internal/builder"
-	"github.com/helmutkemper/util"
+	"github.com/helmutkemper/chaos/internal/dockerfileGolang"
+	"github.com/helmutkemper/chaos/internal/util/utilCopy"
 	"io/fs"
 	"io/ioutil"
 	"log"
@@ -22,6 +24,11 @@ import (
 	dockerContainer "github.com/docker/docker/api/types/container"
 )
 
+const (
+	kDst = 0
+	kSrc = 1
+)
+
 type containerCommon struct {
 	IPV4Address []string
 
@@ -31,25 +38,51 @@ type containerCommon struct {
 
 	volumeContainer []string
 	volumeHost      [][]string
+
+	manager *Manager
+
+	imageExpirationTime time.Duration
+	buildPath           string
+	replaceBeforeBuild  [][]string
+	command             string
+	imageId             string
+	imageName           string
+	containerName       string
+	copies              int
+	csvPath             string
+	failPath            string
+	failFlag            []string
+	failLogsLastSize    []int
+
+	environment [][]string
+
+	makeDefaultDockerfile       bool
+	makeDefaultDockerfileExtras bool
+
+	enableCache    bool
+	imageCacheName string
+	autoDockerfile DockerfileAuto
+
+	contentGitConfigFile     string
+	contentKnownHostsFile    string
+	contentIdRsaFile         string
+	contentIdEcdsaFile       string
+	gitPathPrivateRepository string
 }
 
 type ContainerFromImage struct {
 	containerCommon
-
-	manager *Manager
-
-	imageId          string
-	imageName        string
-	containerName    string
-	copies           int
-	csvPath          string
-	failPath         string
-	failFlag         []string
-	failLogsLastSize []int
 }
 
 func (el *ContainerFromImage) New(manager *Manager) {
 	el.manager = manager
+}
+
+func (el *ContainerFromImage) MakeDockerfile(extras bool) (ref *ContainerFromImage) {
+	el.makeDefaultDockerfile = true
+	el.makeDefaultDockerfileExtras = extras
+
+	return el
 }
 
 // Volumes
@@ -238,12 +271,13 @@ func (el *ContainerFromImage) StdinOnce(once bool) (ref *ContainerFromImage) {
 // EnvironmentVar
 //
 // List of environment variable to set in the container
-func (el *ContainerFromImage) EnvironmentVar(env ...string) (ref *ContainerFromImage) {
+func (el *ContainerFromImage) EnvironmentVar(env ...[]string) (ref *ContainerFromImage) {
 	if len(env) == 0 {
 		env = nil
+		return el
 	}
 
-	el.manager.DockerSys[0].Config.Env = env
+	el.environment = env
 	return el
 }
 
@@ -398,6 +432,23 @@ func (el *ContainerFromImage) SaveStatistics(path string) (ref *ContainerFromIma
 	return el
 }
 
+func (el *ContainerFromImage) ReplaceBeforeBuild(dst, src string) (ref *ContainerFromImage) {
+	var err error
+	if el.replaceBeforeBuild == nil {
+		el.replaceBeforeBuild = make([][]string, 0)
+	}
+
+	src, err = filepath.Abs(src)
+	if err != nil {
+		el.manager.ErrorCh <- fmt.Errorf("container.ReplaceBeforeBuild().error: %v", err)
+		return el
+	}
+
+	el.replaceBeforeBuild = append(el.replaceBeforeBuild, []string{dst, src})
+
+	return el
+}
+
 func (el *ContainerFromImage) FailFlag(path string, flags ...string) (ref *ContainerFromImage) {
 	var err error
 	var fileInfo os.FileInfo
@@ -423,6 +474,20 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 		err = el.manager.DockerSys[i].ContainerStart(el.manager.Id[i])
 		if err != nil {
 			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerStart().error: %v", i, err)
+			return el
+		}
+	}
+
+	var inspect types.ContainerJSON
+	for i := 0; i != el.copies; i += 1 {
+		inspect, err = el.manager.DockerSys[i].ContainerInspect(el.manager.Id[i])
+		if err != nil {
+			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerInspect().error: %v", i, err)
+			return el
+		}
+
+		if inspect.State == nil || inspect.State.Running == false {
+			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().error: %v", i, "container is't running")
 			return el
 		}
 	}
@@ -499,15 +564,14 @@ func (el *ContainerFromImage) logsSearchAndReplaceIntoText(key int, logs *[]byte
 				if pathLog != "" {
 					dirList, err = ioutil.ReadDir(pathLog)
 					if err != nil {
-						log.Printf("ioutil.ReadDir().error: %v", err.Error())
-						util.TraceToLog()
+						el.manager.ErrorCh <- fmt.Errorf("container.logsSearchAndReplaceIntoText().ioutil.ReadDir(%v).error: %v", pathLog, err)
 						return
 					}
 					var totalOfFiles = strconv.Itoa(len(dirList))
-					err = ioutil.WriteFile(filepath.Join(pathLog, el.containerName+"_"+strconv.FormatInt(int64(key), 10)+"."+totalOfFiles+".fail.log"), *logs, fs.ModePerm)
+					var path = filepath.Join(pathLog, el.containerName+"_"+strconv.FormatInt(int64(key), 10)+"."+totalOfFiles+".fail.log")
+					err = ioutil.WriteFile(path, *logs, fs.ModePerm)
 					if err != nil {
-						log.Printf("ioutil.WriteFile().error: %v", err.Error())
-						util.TraceToLog()
+						el.manager.ErrorCh <- fmt.Errorf("container.logsSearchAndReplaceIntoText().ioutil.WriteFile(%v).error: %v", path, err)
 						return
 					}
 				}
@@ -657,33 +721,229 @@ func (el *ContainerFromImage) statsThread() {
 	}()
 }
 
-func (el *ContainerFromImage) Create(imageName, containerName string, copies int) (ref *ContainerFromImage) {
+func (el *ContainerFromImage) Create(containerName string, copies int) (ref *ContainerFromImage) {
 	var err error
 
 	if copies == 0 {
 		return el
 	}
 
+	// todo: definir
+	if el.autoDockerfile == nil {
+		el.autoDockerfile = new(dockerfileGolang.DockerfileGolang)
+	}
+
+	if !strings.Contains(containerName, "delete") {
+		containerName = "delete_" + containerName
+	}
+
+	//el.imageId, err = el.manager.DockerSys[0].ImageFindIdByName(el.imageName)
+	//if err != nil {
+	//  el.manager.ErrorCh <- fmt.Errorf("container.Create().ImageFindIdByName().error: %v", err)
+	//  return el
+	//}
+
 	el.failLogsLastSize = make([]int, copies)
 	// adjust image name to have version tag
-	el.imageName = el.manager.DockerSys[0].AdjustImageName(imageName)
+	el.imageName = el.manager.DockerSys[0].AdjustImageName(el.imageName)
 	el.containerName = containerName
 	el.copies = copies
 
-	// if the image does not exist, download the image
-	if err = el.imagePull(); err != nil {
-		el.manager.ErrorCh <- err
-		return el
+	var config = el.manager.DockerSys[0].GetConfig()
+
+	switch el.command {
+	case "fromFolder":
+		el.imageId, _ = el.manager.DockerSys[0].ImageFindIdByName(el.imageName)
+		if el.imageId != "" && el.imageExpirationTimeIsValid() == true {
+			return
+		}
+
+		if el.buildPath == "" {
+			el.manager.ErrorCh <- fmt.Errorf("set build folder path first")
+			return el
+		}
+
+		//if el.replaceBeforeBuild != nil {
+		var tmpDir string
+		tmpDir, err = os.MkdirTemp("", "chaos__")
+		if err != nil {
+			el.manager.ErrorCh <- fmt.Errorf("container.Create().CreateTemp().error: %v", err)
+			return el
+		}
+		defer func() {
+			_ = os.RemoveAll(tmpDir)
+		}()
+
+		el.buildPath, err = filepath.Abs(el.buildPath)
+		if err != nil {
+			el.manager.ErrorCh <- fmt.Errorf("container.Create().filepath.Abs().error: %v", err)
+			return el
+		}
+
+		err = utilCopy.Dir(tmpDir, el.buildPath)
+		if err != nil {
+			el.manager.ErrorCh <- fmt.Errorf("container.Create().utilCopy.Dir(0).error: %v", err)
+			return el
+		}
+
+		var fileInfo os.FileInfo
+		//var replaceBeforeBuildSource string
+		for k := range el.replaceBeforeBuild {
+
+			fileInfo, err = os.Stat(el.replaceBeforeBuild[k][kSrc])
+			if err != nil {
+				el.manager.ErrorCh <- fmt.Errorf("container.Create().os.Stat().error: %v", err)
+				return el
+			}
+
+			if fileInfo.IsDir() {
+				err = utilCopy.Dir(filepath.Join(tmpDir, el.replaceBeforeBuild[k][kDst]), el.replaceBeforeBuild[k][kSrc])
+				if err != nil {
+					el.manager.ErrorCh <- fmt.Errorf("container.Create().utilCopy.Dir(1).error: %v", err)
+					return el
+				}
+			} else {
+				err = utilCopy.File(filepath.Join(tmpDir, el.replaceBeforeBuild[k][kDst]), el.replaceBeforeBuild[k][kSrc])
+				if err != nil {
+					el.manager.ErrorCh <- fmt.Errorf("container.Create().utilCopy.File(0).error: %v", err)
+					return el
+				}
+			}
+		}
+
+		el.buildPath = tmpDir
+		//} else {
+		//  el.buildPath, err = filepath.Abs(el.buildPath)
+		//  if err != nil {
+		//    el.manager.ErrorCh <- fmt.Errorf("container.Create().filepath.Abs().error: %v", err)
+		//    return el
+		//  }
+		//}
+
+		var volumes = make([]mount.Mount, 0)
+
+		if el.makeDefaultDockerfile == true {
+			var dockerfile string
+			var fileList []fs.FileInfo
+
+			fileList, err = ioutil.ReadDir(el.buildPath)
+			if err != nil {
+				el.manager.ErrorCh <- fmt.Errorf("container.Create().ioutil.ReadDir().error: %v", err)
+				return el
+			}
+
+			// fixme: modificar isto
+			// deve ir para a interface{} fazer a verificação
+			var pass = false
+			for _, file := range fileList {
+				if file.Name() == "go.mod" {
+					pass = true
+					break
+				}
+			}
+			if pass == false {
+				el.manager.ErrorCh <- errors.New("go.mod file not found")
+				return el
+			}
+
+			if el.enableCache == true {
+				_, err = el.manager.DockerSys[0].ImageFindIdByName(el.imageCacheName)
+				if err != nil && err.Error() == "image name not found" {
+					err = nil
+					el.enableCache = false
+				}
+				if err != nil {
+					el.manager.ErrorCh <- fmt.Errorf("container.Create().ImageFindIdByName().error: %v", err)
+					return el
+				}
+			}
+
+			dockerfile, err = el.autoDockerfile.MountDefaultDockerfile(
+				el.manager.ImageBuildOptions.BuildArgs,
+				el.portsContainer,
+				volumes,
+				el.makeDefaultDockerfileExtras,
+				el.enableCache,
+				el.imageCacheName,
+			)
+			if err != nil {
+				el.manager.ErrorCh <- fmt.Errorf("container.Create().autoDockerfile.MountDefaultDockerfile().error: %v", err)
+				return el
+			}
+
+			var dockerfilePath = filepath.Join(el.buildPath, "Dockerfile-iotmaker")
+			err = ioutil.WriteFile(dockerfilePath, []byte(dockerfile), os.ModePerm)
+			if err != nil {
+				el.manager.ErrorCh <- fmt.Errorf("container.Create().ioutil.WriteFile().error: %v", err)
+				return el
+			}
+		}
+
+		el.autoDockerfile.Prayer()
+
+		var changePointer = make(chan builder.ContainerPullStatusSendToChannel)
+		go func(ch *chan builder.ContainerPullStatusSendToChannel) {
+			for {
+
+				select {
+				case event := <-*ch:
+					var stream = event.Stream
+					stream = strings.ReplaceAll(stream, "\n", "")
+					stream = strings.ReplaceAll(stream, "\r", "")
+					stream = strings.Trim(stream, " ")
+
+					if stream == "" {
+						continue
+					}
+
+					log.Printf("%v", stream)
+
+					if event.Closed == true {
+						return
+					}
+				}
+			}
+		}(&changePointer)
+
+		el.imageId, err = el.manager.DockerSys[0].ImageBuildFromFolder(
+			el.buildPath,
+			el.imageName,
+			[]string{},
+			el.manager.ImageBuildOptions,
+			&changePointer,
+		)
+		if err != nil {
+			el.manager.ErrorCh <- fmt.Errorf("container.Create().ImageBuildFromFolder().error: %v", err)
+			return
+		}
+
+		if el.imageId == "" {
+			el.manager.ErrorCh <- fmt.Errorf("container.Create().ImageBuildFromFolder().error: %v", "image ID was not generated")
+			return
+		}
+
+		// Construir uma imagem de múltiplas etapas deixa imagens grandes e sem serventia, ocupando espaço no HD.
+		_ = el.manager.DockerSys[0].ImageGarbageCollector()
+		//if err != nil {
+		//	return
+		//}
+
+	case "fromImage":
+		// if the image does not exist, download the image
+		if err = el.imagePull(); err != nil {
+			el.manager.ErrorCh <- fmt.Errorf("container.Create().imagePull().error: %v", err)
+			return el
+		}
 	}
 
 	var ipAddress string
 	var netConfig *networkTypes.NetworkingConfig
 	el.IPV4Address = make([]string, 0)
-	for i := 0; i != copies; i += 1 {
+	for iCopy := 0; iCopy != copies; iCopy += 1 {
 
 		// index zero is created when the manager object is created, the other indexes are created here, in case there is
 		// more than one container to be created
-		if i != 0 {
+		if iCopy != 0 {
 			var dockerSys = new(builder.DockerSystem)
 			_ = dockerSys.Init()
 			el.manager.DockerSys = append(el.manager.DockerSys, dockerSys)
@@ -693,7 +953,7 @@ func (el *ContainerFromImage) Create(imageName, containerName string, copies int
 		if el.manager.network != nil {
 			ipAddress, netConfig, err = el.manager.network.generator.GetNext()
 			if err != nil {
-				el.manager.ErrorCh <- fmt.Errorf("container.network().GetNext().error: %v", err)
+				el.manager.ErrorCh <- fmt.Errorf("container.Create().network.GetNext().error: %v", err)
 				return el
 			}
 			el.IPV4Address = append(el.IPV4Address, ipAddress)
@@ -703,8 +963,8 @@ func (el *ContainerFromImage) Create(imageName, containerName string, copies int
 		var portConfig = nat.PortMap{}
 		for kContainer := range el.portsContainer {
 			portBind := make([]nat.PortBinding, 0)
-			if len(el.portsHost[kContainer]) > i && el.portsHost[kContainer][i] > 0 {
-				portBind = append(portBind, nat.PortBinding{HostPort: strconv.FormatInt(el.portsHost[kContainer][i], 10)})
+			if len(el.portsHost[kContainer]) > iCopy && el.portsHost[kContainer][iCopy] > 0 {
+				portBind = append(portBind, nat.PortBinding{HostPort: strconv.FormatInt(el.portsHost[kContainer][iCopy], 10)})
 			}
 
 			portConfig[el.portsContainer[kContainer]] = portBind
@@ -713,31 +973,39 @@ func (el *ContainerFromImage) Create(imageName, containerName string, copies int
 		var volumes = make([]mount.Mount, 0)
 		for k := range el.volumeContainer {
 			volume := mount.Mount{}
-			if len(el.volumeContainer[k]) > i && el.volumeHost[k][i] != "" {
+			if len(el.volumeContainer[k]) > iCopy && el.volumeHost[k][iCopy] != "" {
 				volume.Type = builder.KVolumeMountTypeBindString
-				volume.Source = el.volumeHost[k][i]
+				volume.Source = el.volumeHost[k][iCopy]
 				volume.Target = el.volumeContainer[k]
 
 				volumes = append(volumes, volume)
 			}
 		}
 
-		var config = el.manager.DockerSys[0].GetConfig()
-		config.Image = imageName
+		config.Image = el.imageName
+
+		// todo: documentar isto
+		if len(el.environment) > iCopy {
+			config.Env = el.environment[iCopy]
+		} else if len(el.environment) == 1 {
+			config.Env = el.environment[0]
+		} else {
+			config.Env = nil
+		}
 
 		// create the container, link container and network, but, don't start the container
 		var warnings []string
 		var id string
-		id, warnings, err = el.manager.DockerSys[i].ContainerCreateWithConfig(
+		id, warnings, err = el.manager.DockerSys[iCopy].ContainerCreateWithConfig(
 			config,
-			containerName+"_"+strconv.FormatInt(int64(i), 10),
+			containerName+"_"+strconv.FormatInt(int64(iCopy), 10),
 			builder.KRestartPolicyNo,
 			portConfig,
 			volumes,
 			netConfig,
 		)
 		if err != nil {
-			el.manager.ErrorCh <- fmt.Errorf("container[%v].ContainerCreate().error: %v", i, err)
+			el.manager.ErrorCh <- fmt.Errorf("container[%v].Create().ContainerCreateWithConfig().error: %v", iCopy, err)
 			return el
 		}
 
@@ -746,12 +1014,48 @@ func (el *ContainerFromImage) Create(imageName, containerName string, copies int
 
 		//todo: fazer warnings - não deve ser erro
 		if len(warnings) != 0 {
-			el.manager.ErrorCh <- fmt.Errorf("container[%v].ContainerCreate().warnings: %v", i, strings.Join(warnings, "; "))
+			el.manager.ErrorCh <- fmt.Errorf("container[%v].Create().ContainerCreateWithConfig().warnings: %v", iCopy, strings.Join(warnings, "; "))
 			return el
 		}
 	}
 
 	return el
+}
+
+// imageExpirationTimeIsValid
+//
+// English:
+//
+//	Detects if the image is within the expiration date.
+//
+//	 Output:
+//	   valid: true, if the image is within the expiry date.
+//
+// Português:
+//
+//	Detecta se a imagem está dentro do prazo de validade.
+//
+//	 Saída:
+//	   valid: true, se a imagem está dentro do prazo de validade.
+func (el *ContainerFromImage) imageExpirationTimeIsValid() (valid bool) {
+	if el.imageExpirationTime == 0 {
+		return
+	}
+
+	var err error
+	var inspect types.ImageInspect
+	inspect, err = el.manager.DockerSys[0].ImageInspect(el.imageId)
+	if err != nil {
+		return
+	}
+
+	var imageCreated time.Time
+	imageCreated, err = time.Parse(time.RFC3339Nano, inspect.Created)
+	if err != nil {
+		el.manager.ErrorCh <- fmt.Errorf("container.imageExpirationTimeIsValid().error: %v", err)
+		return
+	}
+	return imageCreated.Add(el.imageExpirationTime).After(time.Now())
 }
 
 // imagePull
@@ -809,4 +1113,941 @@ func (el *ContainerFromImage) imagePull() (err error) {
 	}
 
 	return
+}
+
+// DockerfileAuto
+//
+// English: Interface from automatic Dockerfile generator.
+//
+//	Note: To be able to access private repositories from inside the container, build the image in two or more
+//	steps and in the first step, copy the id_rsa and known_hosts files to the /root/.ssh folder and the .gitconfig
+//	file to the /root folder.
+//
+//	One way to do this automatically is to use the Dockerfile example below, where the arguments SSH_ID_RSA_FILE
+//	contains the file ~/.ssh/id_rsa, KNOWN_HOSTS_FILE contains the file ~/.ssh/known_hosts and GITCONFIG_FILE
+//	contains the file ~/.gitconfig.
+//
+//	If the ~/.ssh/id_rsa key is password protected, use the SetGitSshPassword() function to set the password.
+//
+//	If you want to copy the files into the image automatically, use SetPrivateRepositoryAutoConfig() and the
+//	function will copy the files ~/.ssh/id_rsa, ~/.ssh/known_hosts and ~/.gitconfig to the viable arguments
+//	located above.
+//
+//	If you want to define the files manually, use SetGitConfigFile(), SetSshKnownHostsFile() and SetSshIdRsaFile()
+//	to define the files manually.
+//
+//	The Dockerfile below can be used as a base
+//
+//	  # (en) first stage of the process
+//	  # (pt) primeira etapa do processo
+//	  FROM golang:1.16-alpine as builder
+//
+//	  # (en) enable the argument variables
+//	  # (pt) habilita as variáveis de argumento
+//	  ARG SSH_ID_RSA_FILE
+//	  ARG KNOWN_HOSTS_FILE
+//	  ARG GITCONFIG_FILE
+//	  ARG GIT_PRIVATE_REPO
+//
+//	  # (en) creates the .ssh directory within the root directory
+//	  # (pt) cria o diretório .ssh dentro do diretório root
+//	  RUN mkdir -p /root/.ssh/ && \
+//	      # (en) creates the id_esa file inside the .ssh directory
+//	      # (pt) cria o arquivo id_esa dentro do diretório .ssh
+//	      echo "$SSH_ID_RSA_FILE" > /root/.ssh/id_rsa && \
+//	      # (en) adjust file access security
+//	      # (pt) ajusta a segurança de acesso do arquivo
+//	      chmod -R 600 /root/.ssh/ && \
+//	      # (en) creates the known_hosts file inside the .ssh directory
+//	      # (pt) cria o arquivo known_hosts dentro do diretório .ssh
+//	      echo "$KNOWN_HOSTS_FILE" > /root/.ssh/known_hosts && \
+//	      # (en) adjust file access security
+//	      # (pt) ajusta a segurança de acesso do arquivo
+//	      chmod -R 600 /root/.ssh/known_hosts && \
+//	      # (en) creates the .gitconfig file at the root of the root directory
+//	      # (pt) cria o arquivo .gitconfig na raiz do diretório /root
+//	      echo "$GITCONFIG_FILE" > /root/.gitconfig && \
+//	      # (en) adjust file access security
+//	      # (pt) ajusta a segurança de acesso do arquivo
+//	      chmod -R 600 /root/.gitconfig && \
+//	      # (en) prepares the OS for installation
+//	      # (pt) prepara o OS para instalação
+//	      apk update && \
+//	      # (en) install git and openssh
+//	      # (pt) instala o git e o opnssh
+//	      apk add --no-cache build-base git openssh && \
+//	      # (en) clear the cache
+//	      # (pt) limpa a cache
+//	      rm -rf /var/cache/apk/*
+//
+//	  # (en) creates the /app directory, where your code will be installed
+//	  # (pt) cria o diretório /app, onde seu código vai ser instalado
+//	  WORKDIR /app
+//	  # (en) copy your project into the /app folder
+//	  # (pt) copia seu projeto para dentro da pasta /app
+//	  COPY . .
+//	  # (en) enables the golang compiler to run on an extremely simple OS, scratch
+//	  # (pt) habilita o compilador do golang para rodar em um OS extremamente simples, o scratch
+//	  ARG CGO_ENABLED=0
+//	  # (en) adjust git to work with shh
+//	  # (pt) ajusta o git para funcionar com shh
+//	  RUN git config --global url.ssh://git@github.com/.insteadOf https://github.com/
+//	  # (en) defines the path of the private repository
+//	  # (pt) define o caminho do repositório privado
+//	  RUN echo "go env -w GOPRIVATE=$GIT_PRIVATE_REPO"
+//	  # (en) install the dependencies in the go.mod file
+//	  # (pt) instala as dependências no arquivo go.mod
+//	  RUN go mod tidy
+//	  # (en) compiles the main.go file
+//	  # (pt) compila o arquivo main.go
+//	  RUN go build -ldflags="-w -s" -o /app/main /app/main.go
+//	  # (en) creates a new scratch-based image
+//	  # (pt) cria uma nova imagem baseada no scratch
+//	  # (en) scratch is an extremely simple OS capable of generating very small images
+//	  # (pt) o scratch é um OS extremamente simples capaz de gerar imagens muito reduzidas
+//	  # (en) discarding the previous image erases git access credentials for your security and reduces the size of the
+//	  #      image to save server space
+//	  # (pt) descartar a imagem anterior apaga as credenciais de acesso ao git para a sua segurança e reduz o tamanho
+//	  #      da imagem para poupar espaço no servidor
+//	  FROM scratch
+//	  # (en) copy your project to the new image
+//	  # (pt) copia o seu projeto para a nova imagem
+//	  COPY --from=builder /app/main .
+//	  # (en) execute your project
+//	  # (pt) executa o seu projeto
+//	  CMD ["/main"]
+//
+// Português: Interface do gerador de dockerfile automático.
+//
+//	Nota: Para conseguir acessar repositórios privados de dentro do container, construa a imagem em duas ou mais
+//	etapas e na primeira etapa, copie os arquivos id_rsa e known_hosts para a pasta /root/.ssh e o arquivo
+//	.gitconfig para a pasta /root/.
+//
+//	Uma maneira de fazer isto de forma automática é usar o exemplo de Dockerfile abaixo, onde os argumentos
+//	SSH_ID_RSA_FILE contém o arquivo ~/.ssh/id_rsa, KNOWN_HOSTS_FILE contém o arquivo ~/.ssh/known_hosts e
+//	GITCONFIG_FILE contém o arquivo ~/.gitconfig.
+//
+//	Caso a chave ~/.ssh/id_rsa seja protegida com senha, use a função SetGitSshPassword() para definir a senha da
+//	mesma.
+//
+//	Caso você queira copiar os arquivos para dentro da imagem de forma automática, use
+//	SetPrivateRepositoryAutoConfig() e a função copiará os arquivos ~/.ssh/id_rsa, ~/.ssh/known_hosts e
+//	~/.gitconfig para as viáveis de argumentos sitada anteriormente.
+//
+//	Caso queira definir os arquivos de forma manual, use SetGitConfigFile(), SetSshKnownHostsFile() e
+//	SetSshIdRsaFile() para definir os arquivos de forma manual.
+//
+//	O arquivo Dockerfile abaixo pode ser usado como base
+//
+//	  # (en) first stage of the process
+//	  # (pt) primeira etapa do processo
+//	  FROM golang:1.16-alpine as builder
+//
+//	  # (en) enable the argument variables
+//	  # (pt) habilita as variáveis de argumento
+//	  ARG SSH_ID_RSA_FILE
+//	  ARG KNOWN_HOSTS_FILE
+//	  ARG GITCONFIG_FILE
+//	  ARG GIT_PRIVATE_REPO
+//
+//	  # (en) creates the .ssh directory within the root directory
+//	  # (pt) cria o diretório .ssh dentro do diretório root
+//	  RUN mkdir -p /root/.ssh/ && \
+//	      # (en) creates the id_esa file inside the .ssh directory
+//	      # (pt) cria o arquivo id_esa dentro do diretório .ssh
+//	      echo "$SSH_ID_RSA_FILE" > /root/.ssh/id_rsa && \
+//	      # (en) adjust file access security
+//	      # (pt) ajusta a segurança de acesso do arquivo
+//	      chmod -R 600 /root/.ssh/ && \
+//	      # (en) creates the known_hosts file inside the .ssh directory
+//	      # (pt) cria o arquivo known_hosts dentro do diretório .ssh
+//	      echo "$KNOWN_HOSTS_FILE" > /root/.ssh/known_hosts && \
+//	      # (en) adjust file access security
+//	      # (pt) ajusta a segurança de acesso do arquivo
+//	      chmod -R 600 /root/.ssh/known_hosts && \
+//	      # (en) creates the .gitconfig file at the root of the root directory
+//	      # (pt) cria o arquivo .gitconfig na raiz do diretório /root
+//	      echo "$GITCONFIG_FILE" > /root/.gitconfig && \
+//	      # (en) adjust file access security
+//	      # (pt) ajusta a segurança de acesso do arquivo
+//	      chmod -R 600 /root/.gitconfig && \
+//	      # (en) prepares the OS for installation
+//	      # (pt) prepara o OS para instalação
+//	      apk update && \
+//	      # (en) install git and openssh
+//	      # (pt) instala o git e o opnssh
+//	      apk add --no-cache build-base git openssh && \
+//	      # (en) clear the cache
+//	      # (pt) limpa a cache
+//	      rm -rf /var/cache/apk/*
+//
+//	  # (en) creates the /app directory, where your code will be installed
+//	  # (pt) cria o diretório /app, onde seu código vai ser instalado
+//	  WORKDIR /app
+//	  # (en) copy your project into the /app folder
+//	  # (pt) copia seu projeto para dentro da pasta /app
+//	  COPY . .
+//	  # (en) enables the golang compiler to run on an extremely simple OS, scratch
+//	  # (pt) habilita o compilador do golang para rodar em um OS extremamente simples, o scratch
+//	  ARG CGO_ENABLED=0
+//	  # (en) adjust git to work with shh
+//	  # (pt) ajusta o git para funcionar com shh
+//	  RUN git config --global url.ssh://git@github.com/.insteadOf https://github.com/
+//	  # (en) defines the path of the private repository
+//	  # (pt) define o caminho do repositório privado
+//	  RUN echo "go env -w GOPRIVATE=$GIT_PRIVATE_REPO"
+//	  # (en) install the dependencies in the go.mod file
+//	  # (pt) instala as dependências no arquivo go.mod
+//	  RUN go mod tidy
+//	  # (en) compiles the main.go file
+//	  # (pt) compila o arquivo main.go
+//	  RUN go build -ldflags="-w -s" -o /app/main /app/main.go
+//	  # (en) creates a new scratch-based image
+//	  # (pt) cria uma nova imagem baseada no scratch
+//	  # (en) scratch is an extremely simple OS capable of generating very small images
+//	  # (pt) o scratch é um OS extremamente simples capaz de gerar imagens muito reduzidas
+//	  # (en) discarding the previous image erases git access credentials for your security and reduces the size of the
+//	  #      image to save server space
+//	  # (pt) descartar a imagem anterior apaga as credenciais de acesso ao git para a sua segurança e reduz o tamanho
+//	  #      da imagem para poupar espaço no servidor
+//	  FROM scratch
+//	  # (en) copy your project to the new image
+//	  # (pt) copia o seu projeto para a nova imagem
+//	  COPY --from=builder /app/main .
+//	  # (en) execute your project
+//	  # (pt) executa o seu projeto
+//	  CMD ["/main"]
+type DockerfileAuto interface {
+	MountDefaultDockerfile(args map[string]*string, ports []nat.Port, volumes []mount.Mount, installExtraPackages bool, useCache bool, imageCacheName string) (dockerfile string, err error)
+	Prayer()
+	SetFinalImageName(name string)
+	AddCopyToFinalImage(src, dst string)
+	SetDefaultSshFileName(name string)
+}
+
+// SetImageBuildOptionsSecurityOpt
+//
+// English:
+//
+//	Set the container security options
+//
+//	 Input:
+//	   values: container security options
+//
+// Examples:
+//
+//	label=user:USER        — Set the label user for the container
+//	label=role:ROLE        — Set the label role for the container
+//	label=type:TYPE        — Set the label type for the container
+//	label=level:LEVEL      — Set the label level for the container
+//	label=disable          — Turn off label confinement for the container
+//	apparmor=PROFILE       — Set the apparmor profile to be applied to the container
+//	no-new-privileges:true — Disable container processes from gaining new privileges
+//	seccomp=unconfined     — Turn off seccomp confinement for the container
+//	seccomp=profile.json   — White-listed syscalls seccomp Json file to be used as a seccomp filter
+//
+// Português:
+//
+//	Modifica as opções de segurança do container
+//
+//	 Entrada:
+//	   values: opções de segurança do container
+//
+// Exemplos:
+//
+//	label=user:USER        — Determina o rótulo user para o container
+//	label=role:ROLE        — Determina o rótulo role para o container
+//	label=type:TYPE        — Determina o rótulo type para o container
+//	label=level:LEVEL      — Determina o rótulo level para o container
+//	label=disable          — Desliga o confinamento do rótulo para o container
+//	apparmor=PROFILE       — Habilita o perfil definido pelo apparmor do linux para ser definido ao container
+//	no-new-privileges:true — Impede o processo do container a ganhar novos privilégios
+//	seccomp=unconfined     — Desliga o confinamento causado pelo seccomp do linux ao container
+//	seccomp=profile.json   — White-listed syscalls seccomp Json file to be used as a seccomp filter
+func (el *ContainerFromImage) SetImageBuildOptionsSecurityOpt(value []string) (ref *ContainerFromImage) {
+	el.manager.ImageBuildOptions.SecurityOpt = value
+	return el
+}
+
+// AddImageBuildOptionsBuildArgs
+//
+// English:
+//
+//	Set build-time variables (--build-arg)
+//
+//	 Input:
+//	   key: Argument name
+//	   value: Argument value
+//
+// Example:
+//
+//	key:   argument key (e.g. Dockerfile: ARG key)
+//	value: argument value
+//
+//	https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg
+//	docker build --build-arg HTTP_PROXY=http://10.20.30.2:1234
+//
+//	  code:
+//	    var key = "GIT_PRIVATE_REPO"
+//	    var value = "github.com/yourgit"
+//
+//	    var container = ContainerBuilder{}
+//	    container.AddImageBuildOptionsBuildArgs(key, &value)
+//
+//	  Dockerfile:
+//	    FROM golang:1.16-alpine as builder
+//	    ARG GIT_PRIVATE_REPO
+//	    RUN go env -w GOPRIVATE=$GIT_PRIVATE_REPO
+//
+// Português:
+//
+//	Adiciona uma variável durante a construção (--build-arg)
+//
+//	 Input:
+//	   key: Nome do argumento.
+//	   value: Valor do argumento.
+//
+// Exemplo:
+//
+//	key:   chave do argumento (ex. Dockerfile: ARG key)
+//	value: valor do argumento
+//
+//	https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg
+//	docker build --build-arg HTTP_PROXY=http://10.20.30.2:1234
+//
+//	  code:
+//	    var key = "GIT_PRIVATE_REPO"
+//	    var value = "github.com/yourgit"
+//
+//	    var container = ContainerBuilder{}
+//	    container.AddImageBuildOptionsBuildArgs(key, &value)
+//
+//	  Dockerfile:
+//	    FROM golang:1.16-alpine as builder
+//	    ARG GIT_PRIVATE_REPO
+//	    RUN go env -w GOPRIVATE=$GIT_PRIVATE_REPO
+func (el *ContainerFromImage) AddImageBuildOptionsBuildArgs(key string, value *string) (ref *ContainerFromImage) {
+	if el.manager.ImageBuildOptions.BuildArgs == nil {
+		el.manager.ImageBuildOptions.BuildArgs = make(map[string]*string)
+	}
+
+	el.manager.ImageBuildOptions.BuildArgs[key] = value
+	return el
+}
+
+// addImageBuildOptionsGitCredentials
+//
+// English:
+//
+//	Prepare the git credentials.
+//
+//	Called from SetPrivateRepositoryAutoConfig()
+//
+// Português:
+//
+//	Prepara as credenciais do git.
+//
+//	Chamada por SetPrivateRepositoryAutoConfig()
+func (el *ContainerFromImage) addImageBuildOptionsGitCredentials() {
+
+	if el.manager.ImageBuildOptions.BuildArgs == nil {
+		el.manager.ImageBuildOptions.BuildArgs = make(map[string]*string)
+	}
+
+	if el.contentGitConfigFile != "" {
+		el.manager.ImageBuildOptions.BuildArgs["GITCONFIG_FILE"] = &el.contentGitConfigFile
+	}
+
+	if el.contentKnownHostsFile != "" {
+		el.manager.ImageBuildOptions.BuildArgs["KNOWN_HOSTS_FILE"] = &el.contentKnownHostsFile
+	}
+
+	if el.contentIdRsaFile != "" {
+		el.manager.ImageBuildOptions.BuildArgs["SSH_ID_RSA_FILE"] = &el.contentIdRsaFile
+	}
+
+	if el.contentIdEcdsaFile != "" {
+		el.manager.ImageBuildOptions.BuildArgs["SSH_ID_ECDSA_FILE"] = &el.contentIdEcdsaFile
+	}
+
+	if el.gitPathPrivateRepository != "" {
+		el.manager.ImageBuildOptions.BuildArgs["GIT_PRIVATE_REPO"] = &el.gitPathPrivateRepository
+	}
+
+	return
+}
+
+// Target
+//
+// English:
+//
+//	Build the specified stage as defined inside the Dockerfile.
+//
+//	 Input:
+//	   value: stage name
+//
+// Note:
+//
+//   - See the multi-stage build docs for details.
+//     See https://docs.docker.com/develop/develop-images/multistage-build/
+//
+// Português:
+//
+//	Monta o container a partir do estágio definido no arquivo Dockerfile.
+//
+//	 Entrada:
+//	   value: nome do estágio
+//
+// Nota:
+//
+//   - Veja a documentação de múltiplos estágios para mais detalhes.
+//     See https://docs.docker.com/develop/develop-images/multistage-build/
+func (el *ContainerFromImage) Target(value string) {
+	el.manager.ImageBuildOptions.Target = value
+}
+
+// Squash
+//
+// English:
+//
+//	Squash the resulting image's layers to the parent preserves the original image and creates a new
+//	one from the parent with all the changes applied to a single layer
+//
+//	 Input:
+//	   value: true preserve the original image and creates a new one from the parent
+//
+// Português:
+//
+//	Usa o conteúdo dos layers da imagem pai para criar uma imagem nova, preservando a imagem pai, e
+//	aplica todas as mudanças a um novo layer
+//
+//	 Entrada:
+//	   value: true preserva a imagem original e cria uma nova imagem a partir da imagem pai
+func (el *ContainerFromImage) Squash(value bool) {
+	el.manager.ImageBuildOptions.Squash = value
+}
+
+// Platform
+//
+// English:
+//
+//	Target platform containers for this service will run on, using the os[/arch[/variant]] syntax.
+//
+//	 Input:
+//	   value: target platform
+//
+// Examples:
+//
+//	osx
+//	windows/amd64
+//	linux/arm64/v8
+//
+// Português:
+//
+//	Especifica a plataforma de container onde o serviço vai rodar, usando a sintaxe
+//	os[/arch[/variant]]
+//
+//	 Entrada:
+//	   value: plataforma de destino
+//
+// Exemplos:
+//
+//	osx
+//	windows/amd64
+//	linux/arm64/v8
+func (el *ContainerFromImage) Platform(value string) {
+	el.manager.ImageBuildOptions.Platform = value
+}
+
+// NoCache
+//
+// English:
+//
+//	Set image build no cache
+//
+// Português:
+//
+//	Define a opção `sem cache` para a construção da imagem
+func (el *ContainerFromImage) NoCache() {
+	el.manager.ImageBuildOptions.NoCache = true
+}
+
+//User memory constraints🔗
+//We have four ways to set user memory usage:
+//
+//Option	Result
+//memory=inf, memory-swap=inf (default)	There is no memory limit for the container. The container can use as much memory as needed.
+//memory=L<inf, memory-swap=inf	(specify memory and set memory-swap as -1) The container is not allowed to use more than L bytes of memory, but can use as much swap as is needed (if the host supports swap memory).
+//memory=L<inf, memory-swap=2*L	(specify memory without memory-swap) The container is not allowed to use more than L bytes of memory, swap plus memory usage is double of that.
+//memory=L<inf, memory-swap=S<inf, L<=S	(specify both memory and memory-swap) The container is not allowed to use more than L bytes of memory, swap plus memory usage is limited by S.
+//Examples:
+//
+//$ docker run -it ubuntu:14.04 /bin/bash
+//We set nothing about memory, this means the processes in the container can use as much memory and swap memory as they need.
+//
+//$ docker run -it -m 300M --memory-swap -1 ubuntu:14.04 /bin/bash
+//We set memory limit and disabled swap memory limit, this means the processes in the container can use 300M memory and as much swap memory as they need (if the host supports swap memory).
+//
+//$ docker run -it -m 300M ubuntu:14.04 /bin/bash
+//We set memory limit only, this means the processes in the container can use 300M memory and 300M swap memory, by default, the total virtual memory size (--memory-swap) will be set as double of memory, in this case, memory + swap would be 2*300M, so processes can use 300M swap memory as well.
+//
+//$ docker run -it -m 300M --memory-swap 1G ubuntu:14.04 /bin/bash
+//We set both memory and swap memory, so the processes in the container can use 300M memory and 700M swap memory.
+//
+//Memory reservation is a kind of memory soft limit that allows for greater sharing of memory. Under normal circumstances, containers can use as much of the memory as needed and are constrained only by the hard limits set with the -m/--memory option. When memory reservation is set, Docker detects memory contention or low memory and forces containers to restrict their consumption to a reservation limit.
+//
+//Always set the memory reservation value below the hard limit, otherwise the hard limit takes precedence. A reservation of 0 is the same as setting no reservation. By default (without reservation set), memory reservation is the same as the hard memory limit.
+//
+//Memory reservation is a soft-limit feature and does not guarantee the limit won’t be exceeded. Instead, the feature attempts to ensure that, when memory is heavily contended for, memory is allocated based on the reservation hints/setup.
+//
+//The following example limits the memory (-m) to 500M and sets the memory reservation to 200M.
+//
+//$ docker run -it -m 500M --memory-reservation 200M ubuntu:14.04 /bin/bash
+//Under this configuration, when the container consumes memory more than 200M and less than 500M, the next system memory reclaim attempts to shrink container memory below 200M.
+//
+//The following example set memory reservation to 1G without a hard memory limit.
+//
+//$ docker run -it --memory-reservation 1G ubuntu:14.04 /bin/bash
+//The container can use as much memory as it needs. The memory reservation setting ensures the container doesn’t consume too much memory for long time, because every memory reclaim shrinks the container’s consumption to the reservation.
+//
+//By default, kernel kills processes in a container if an out-of-memory (OOM) error occurs. To change this behaviour, use the --oom-kill-disable option. Only disable the OOM killer on containers where you have also set the -m/--memory option. If the -m flag is not set, this can result in the host running out of memory and require killing the host’s system processes to free memory.
+//
+//The following example limits the memory to 100M and disables the OOM killer for this container:
+//
+//$ docker run -it -m 100M --oom-kill-disable ubuntu:14.04 /bin/bash
+//The following example, illustrates a dangerous way to use the flag:
+//
+//$ docker run -it --oom-kill-disable ubuntu:14.04 /bin/bash
+//The container has unlimited memory which can cause the host to run out memory and require killing system processes to free memory. The --oom-score-adj parameter can be changed to select the priority of which containers will be killed when the system is out of memory, with negative scores making them less likely to be killed, and positive scores more likely.
+
+// MemorySwap
+//
+// English:
+//
+//	Set memory swap (--memory-swap)
+//
+// Note:
+//
+//   - Use value * KKiloByte, value * KMegaByte and value * KGigaByte
+//     See https://docs.docker.com/engine/reference/run/#user-memory-constraints
+//
+// Português:
+//
+//	habilita a opção memory swp
+//
+// Note:
+//
+//   - Use value * KKiloByte, value * KMegaByte e value * KGigaByte
+//     See https://docs.docker.com/engine/reference/run/#user-memory-constraints
+func (el *ContainerFromImage) MemorySwap(value int64) (ref *ContainerFromImage) {
+	el.manager.ImageBuildOptions.MemorySwap = value
+
+	//e.addProblem("The SetImageBuildOptionsMemorySwap() function can generate an error when building the image.")
+	return el
+}
+
+//User memory constraints🔗
+//We have four ways to set user memory usage:
+//
+//Option	Result
+//memory=inf, memory-swap=inf (default)	There is no memory limit for the container. The container can use as much memory as needed.
+//memory=L<inf, memory-swap=inf	(specify memory and set memory-swap as -1) The container is not allowed to use more than L bytes of memory, but can use as much swap as is needed (if the host supports swap memory).
+//memory=L<inf, memory-swap=2*L	(specify memory without memory-swap) The container is not allowed to use more than L bytes of memory, swap plus memory usage is double of that.
+//memory=L<inf, memory-swap=S<inf, L<=S	(specify both memory and memory-swap) The container is not allowed to use more than L bytes of memory, swap plus memory usage is limited by S.
+//Examples:
+//
+//$ docker run -it ubuntu:14.04 /bin/bash
+//We set nothing about memory, this means the processes in the container can use as much memory and swap memory as they need.
+//
+//$ docker run -it -m 300M --memory-swap -1 ubuntu:14.04 /bin/bash
+//We set memory limit and disabled swap memory limit, this means the processes in the container can use 300M memory and as much swap memory as they need (if the host supports swap memory).
+//
+//$ docker run -it -m 300M ubuntu:14.04 /bin/bash
+//We set memory limit only, this means the processes in the container can use 300M memory and 300M swap memory, by default, the total virtual memory size (--memory-swap) will be set as double of memory, in this case, memory + swap would be 2*300M, so processes can use 300M swap memory as well.
+//
+//$ docker run -it -m 300M --memory-swap 1G ubuntu:14.04 /bin/bash
+//We set both memory and swap memory, so the processes in the container can use 300M memory and 700M swap memory.
+//
+//Memory reservation is a kind of memory soft limit that allows for greater sharing of memory. Under normal circumstances, containers can use as much of the memory as needed and are constrained only by the hard limits set with the -m/--memory option. When memory reservation is set, Docker detects memory contention or low memory and forces containers to restrict their consumption to a reservation limit.
+//
+//Always set the memory reservation value below the hard limit, otherwise the hard limit takes precedence. A reservation of 0 is the same as setting no reservation. By default (without reservation set), memory reservation is the same as the hard memory limit.
+//
+//Memory reservation is a soft-limit feature and does not guarantee the limit won’t be exceeded. Instead, the feature attempts to ensure that, when memory is heavily contended for, memory is allocated based on the reservation hints/setup.
+//
+//The following example limits the memory (-m) to 500M and sets the memory reservation to 200M.
+//
+//$ docker run -it -m 500M --memory-reservation 200M ubuntu:14.04 /bin/bash
+//Under this configuration, when the container consumes memory more than 200M and less than 500M, the next system memory reclaim attempts to shrink container memory below 200M.
+//
+//The following example set memory reservation to 1G without a hard memory limit.
+//
+//$ docker run -it --memory-reservation 1G ubuntu:14.04 /bin/bash
+//The container can use as much memory as it needs. The memory reservation setting ensures the container doesn’t consume too much memory for long time, because every memory reclaim shrinks the container’s consumption to the reservation.
+//
+//By default, kernel kills processes in a container if an out-of-memory (OOM) error occurs. To change this behaviour, use the --oom-kill-disable option. Only disable the OOM killer on containers where you have also set the -m/--memory option. If the -m flag is not set, this can result in the host running out of memory and require killing the host’s system processes to free memory.
+//
+//The following example limits the memory to 100M and disables the OOM killer for this container:
+//
+//$ docker run -it -m 100M --oom-kill-disable ubuntu:14.04 /bin/bash
+//The following example, illustrates a dangerous way to use the flag:
+//
+//$ docker run -it --oom-kill-disable ubuntu:14.04 /bin/bash
+//The container has unlimited memory which can cause the host to run out memory and require killing system processes to free memory. The --oom-score-adj parameter can be changed to select the priority of which containers will be killed when the system is out of memory, with negative scores making them less likely to be killed, and positive scores more likely.
+
+// Memory
+//
+// English:
+//
+//	The maximum amount of memory the container can use.
+//
+//	 Input:
+//	   value: amount of memory in bytes
+//
+// Note:
+//
+//   - If you set this option, the minimum allowed value is 4 * 1024 * 1024 (4 megabyte);
+//   - Use value * KKiloByte, value * KMegaByte and value * KGigaByte
+//     See https://docs.docker.com/engine/reference/run/#user-memory-constraints
+//
+// Português:
+//
+//	Memória máxima total que o container pode usar.
+//
+//	 Entrada:
+//	   value: Quantidade de memória em bytes
+//
+// Nota:
+//
+//   - Se você vai usar esta opção, o máximo permitido é 4 * 1024 * 1024 (4 megabyte)
+//   - Use value * KKiloByte, value * KMegaByte e value * KGigaByte
+//     See https://docs.docker.com/engine/reference/run/#user-memory-constraints
+func (el *ContainerFromImage) Memory(value int64) (ref *ContainerFromImage) {
+	el.manager.ImageBuildOptions.Memory = value
+
+	//e.addProblem("The SetImageBuildOptionsMemory() function can generate an error when building the image.")
+	return el
+}
+
+// IsolationProcess
+//
+// English:
+//
+//	Set process isolation mode
+//
+// Português:
+//
+//	Determina o método de isolamento do processo
+func (el *ContainerFromImage) IsolationProcess() (ref *ContainerFromImage) {
+	el.manager.ImageBuildOptions.Isolation = dockerContainer.IsolationProcess
+	return el
+}
+
+// IsolationHyperV
+//
+// English:
+//
+//	Set HyperV isolation mode
+//
+// Português:
+//
+//	Define o método de isolamento como sendo HyperV
+func (el *ContainerFromImage) IsolationHyperV() (ref *ContainerFromImage) {
+	el.manager.ImageBuildOptions.Isolation = dockerContainer.IsolationHyperV
+	return el
+}
+
+// IsolationDefault
+//
+// English:
+//
+//	Set default isolation mode on current daemon
+//
+// Português:
+//
+//	Define o método de isolamento do processo como sendo o mesmo do deamon
+func (el *ContainerFromImage) IsolationDefault() (ref *ContainerFromImage) {
+	el.manager.ImageBuildOptions.Isolation = dockerContainer.IsolationDefault
+	return el
+}
+
+// ExtraHosts
+//
+// English:
+//
+//	Add hostname mappings at build-time. Use the same values as the docker client --add-host
+//	parameter.
+//
+//	 Input:
+//	   values: hosts to mapping
+//
+// Example:
+//
+//	values = []string{
+//	  "somehost:162.242.195.82",
+//	  "otherhost:50.31.209.229",
+//	}
+//
+//	An entry with the ip address and hostname is created in /etc/hosts inside containers for this
+//	build, e.g:
+//
+//	  162.242.195.82 somehost
+//	  50.31.209.229 otherhost
+//
+// Português:
+//
+//	Adiciona itens ao mapa de hostname durante o processo de construção da imagem. Use os mesmos
+//	valores que em docker client --add-host parameter.
+//
+//	 Entrada:
+//	   values: hosts para mapeamento
+//
+// Exemplo:
+//
+//	values = []string{
+//	  "somehost:162.242.195.82",
+//	  "otherhost:50.31.209.229",
+//	}
+//
+//	Uma nova entrada com o endereço ip e hostname será criada dentro de /etc/hosts do container.
+//	Exemplo:
+//
+//	  162.242.195.82 somehost
+//	  50.31.209.229 otherhost
+func (el *ContainerFromImage) ExtraHosts(values []string) (ref *ContainerFromImage) {
+	el.manager.ImageBuildOptions.ExtraHosts = values
+	return el
+}
+
+// CacheFrom
+//
+// English:
+//
+//	Specifies images that are used for matching cache.
+//
+//	 Entrada:
+//	   values: images that are used for matching cache.
+//
+// Note:
+//
+//	Images specified here do not need to have a valid parent chain to match cache.
+//
+// Português:
+//
+//	Especifica imagens que são usadas para correspondência de cache.
+//
+//	 Entrada:
+//	   values: imagens que são usadas para correspondência de cache.
+//
+// Note:
+//
+//	As imagens especificadas aqui não precisam ter uma cadeia pai válida para corresponder a cache.
+func (el *ContainerFromImage) CacheFrom(values []string) (ref *ContainerFromImage) {
+	el.manager.ImageBuildOptions.CacheFrom = values
+	return el
+}
+
+// Shares
+//
+// English:
+//
+//	Set the CPU shares of the image build options.
+//
+//	 Input:
+//	   value: CPU shares (Default: 1024)
+//
+//	Set this flag to a value greater or less than the default of 1024 to increase or reduce the
+//	container’s weight, and give it access to a greater or lesser proportion of the host machine’s
+//	CPU cycles.
+//
+//	This is only enforced when CPU cycles are constrained.
+//
+//	When plenty of CPU cycles are available, all containers use as much CPU as they need.
+//
+//	In that way, this is a soft limit. --cpu-shares does not prevent containers from being scheduled
+//	in swarm mode.
+//
+//	It prioritizes container CPU resources for the available CPU cycles.
+//
+//	It does not guarantee or reserve any specific CPU access.
+//
+// Português:
+//
+//	Define o compartilhamento de CPU na construção da imagem.
+//
+//	 Entrada:
+//	   value: Compartilhamento de CPU (Default: 1024)
+//
+//	Defina este sinalizador para um valor maior ou menor que o padrão de 1024 para aumentar ou reduzir
+//	o peso do container e dar a ele acesso a uma proporção maior ou menor dos ciclos de CPU da máquina
+//	host.
+//
+//	Isso só é aplicado quando os ciclos da CPU são restritos. Quando muitos ciclos de CPU estão
+//	disponíveis, todos os container usam a quantidade de CPU de que precisam. Dessa forma, este é um
+//	limite flexível. --cpu-shares não impede que os containers sejam agendados no modo swarm.
+//
+//	Ele prioriza os recursos da CPU do container para os ciclos de CPU disponíveis.
+//
+//	Não garante ou reserva nenhum acesso específico à CPU.
+func (el *ContainerFromImage) Shares(value int64) (ref *ContainerFromImage) { //cpu
+	el.manager.ImageBuildOptions.CPUShares = value
+	return el
+}
+
+// Mems
+//
+// English:
+//
+//	Define a memory nodes (MEMs) (--cpuset-mems)
+//
+//	 Input:
+//	   value: string with the format "0-3,5-7"
+//
+//	--cpuset-mems="" Memory nodes (MEMs) in which to allow execution (0-3, 0,1). Only effective on
+//	NUMA systems.
+//
+//	If you have four memory nodes on your system (0-3), use --cpuset-mems=0,1 then processes in your
+//	Docker container will only use memory from the first two memory nodes.
+//
+// Português:
+//
+//	Define memory node (MEMs) (--cpuset-mems)
+//
+//	 Entrada:
+//	   value: string com o formato "0-3,5-7"
+//
+//	--cpuset-mems="" Memory nodes (MEMs) no qual permitir a execução (0-3, 0,1). Só funciona em
+//	sistemas NUMA.
+//
+//	Se você tiver quatro nodes de memória em seu sistema (0-3), use --cpuset-mems=0,1 então, os
+//	processos em seu container do Docker usarão apenas a memória dos dois primeiros nodes.
+func (el *ContainerFromImage) Mems(value string) (ref *ContainerFromImage) { //cpu
+	el.manager.ImageBuildOptions.CPUSetMems = value
+	return el
+}
+
+// CPUs
+//
+// English:
+//
+//	Limit the specific CPUs or cores a container can use.
+//
+//	 Input:
+//	   value: string with the format "1,2,3"
+//
+//	A comma-separated list or hyphen-separated range of CPUs a container can use, if you have more
+//	than one CPU.
+//
+// The first CPU is numbered 0.
+//
+//	A valid value might be 0-3 (to use the first, second, third, and fourth CPU) or 1,3 (to use the
+//	second and fourth CPU).
+//
+// Português:
+//
+//	Limite a quantidade de CPUs ou núcleos específicos que um container pode usar.
+//
+//	 Entrada:
+//	   value: string com o formato "1,2,3"
+//
+//	Uma lista separada por vírgulas ou intervalo separado por hífen de CPUs que um container pode
+//	usar, se você tiver mais de uma CPU.
+//
+//	A primeira CPU é numerada como 0.
+//
+//	Um valor válido pode ser 0-3 (para usar a primeira, segunda, terceira e quarta CPU) ou 1,3 (para
+//	usar a segunda e a quarta CPU).
+func (el *ContainerFromImage) CPUs(value string) (ref *ContainerFromImage) { //cpu
+	el.manager.ImageBuildOptions.CPUSetCPUs = value
+
+	//e.addProblem("The SetImageBuildOptionsCPUSetCPUs() function can generate an error when building the image.")
+	return el
+}
+
+// Quota
+//
+// English:
+//
+//	Defines the host machine’s CPU cycles.
+//
+//	 Input:
+//	   value: machine’s CPU cycles. (Default: 1024)
+//
+//	Set this flag to a value greater or less than the default of 1024 to increase or reduce the
+//	container’s weight, and give it access to a greater or lesser proportion of the host machine’s
+//	CPU cycles.
+//
+//	This is only enforced when CPU cycles are constrained. When plenty of CPU cycles are available,
+//	all containers use as much CPU as they need. In that way, this is a soft limit. --cpu-shares does
+//	not prevent containers from being scheduled in swarm mode. It prioritizes container CPU resources
+//	for the available CPU cycles.
+//
+//	It does not guarantee or reserve any specific CPU access.
+//
+// Português:
+//
+//	Define os ciclos de CPU da máquina hospedeira.
+//
+//	 Entrada:
+//	   value: ciclos de CPU da máquina hospedeira. (Default: 1024)
+//
+//	Defina este flag para um valor maior ou menor que o padrão de 1024 para aumentar ou reduzir o peso
+//	do container e dar a ele acesso a uma proporção maior ou menor dos ciclos de CPU da máquina
+//	hospedeira.
+//
+//	Isso só é aplicado quando os ciclos da CPU são restritos. Quando muitos ciclos de CPU estão
+//	disponíveis, todos os containeres usam a quantidade de CPU de que precisam. Dessa forma, é um
+//	limite flexível. --cpu-shares não impede que os containers sejam agendados no modo swarm. Ele
+//	prioriza os recursos da CPU do container para os ciclos de CPU disponíveis.
+//
+//	Não garante ou reserva nenhum acesso específico à CPU.
+func (el *ContainerFromImage) Quota(value int64) (ref *ContainerFromImage) { //cpu
+	el.manager.ImageBuildOptions.CPUQuota = value
+
+	//e.addProblem("The SetImageBuildOptionsCPUQuota() function can generate an error when building the image.")
+	return el
+}
+
+// Period
+//
+// English:
+//
+//	Specify the CPU CFS scheduler period, which is used alongside --cpu-quota.
+//
+//	 Input:
+//	   value: CPU CFS scheduler period
+//
+//	Defaults to 100000 microseconds (100 milliseconds). Most users do not change this from the
+//	default.
+//
+//	For most use-cases, --cpus is a more convenient alternative.
+//
+// Português:
+//
+//	Especifique o período do agendador CFS da CPU, que é usado junto com --cpu-quota.
+//
+//	 Entrada:
+//	   value: período do agendador CFS da CPU
+//
+//	O padrão é 100.000 microssegundos (100 milissegundos). A maioria dos usuários não altera o padrão.
+//
+//	Para a maioria dos casos de uso, --cpus é uma alternativa mais conveniente.
+func (el *ContainerFromImage) Period(value int64) (ref *ContainerFromImage) { //cpu
+	el.manager.ImageBuildOptions.CPUPeriod = value
+
+	//e.addProblem("The SetImageBuildOptionsCPUPeriod() function can generate an error when building the image.")
+	return el
+}
+
+// DockerfilePath
+//
+// English:
+//
+// Defines a Dockerfile to build the image.
+//
+// Português:
+//
+// Define um arquivo Dockerfile para construir a imagem.
+func (el *ContainerFromImage) DockerfilePath(path string) (ref *ContainerFromImage) {
+	el.manager.ImageBuildOptions.Dockerfile = path
+	return el
 }
