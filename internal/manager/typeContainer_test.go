@@ -23,14 +23,14 @@ func TestContainerFromImage_Primordial(t *testing.T) {
 
 	mongodb.Primordial().
 		NetworkCreate("delete_before_test", "10.0.0.0/16", "10.0.0.1")
-	//mongodb.ContainerFromImage("mongo:latest").
-	//  SaveStatistics("../../").
-	//  FailFlag("../../bugs", "Multi threading initialized").
-	//  Ports("tcp", 27017, 27016, 27015, 27014).
-	//  Volumes("/data/db", "../../internal/builder/test/data0", "../../internal/builder/test/data1", "../../internal/builder/test/data2").
-	//  EnvironmentVar([]string{"--host 0.0.0.0"}).
-	//  Create("delete_mongo", 3).
-	//  Start()
+	mongodb.ContainerFromImage("mongo:latest").
+		SaveStatistics("../../").
+		FailFlag("../../bugs", "Multi threading initialized").
+		Ports("tcp", 27017, 27016, 27015, 27014).
+		Volumes("/data/db", "../../internal/builder/test/data0", "../../internal/builder/test/data1", "../../internal/builder/test/data2").
+		EnvironmentVar([]string{"--host 0.0.0.0"}).
+		Create("delete_mongo", 3).
+		Start()
 
 	barco := &Manager{}
 	barco.New(errorCh)
@@ -63,6 +63,7 @@ func TestContainerFromImage_Primordial(t *testing.T) {
 			},
 		).
 		FailFlag("../../bugs", "\"fatal\"").
+		FailFlag("../../bugs", "panic:").
 		ReplaceBeforeBuild("/Dockerfile", "/Users/kemper/go/projetos/barcocopy/internal/test/chaos/simpleRestart/Dockerfile").
 		Create("delete_barco", 3).
 		Start()

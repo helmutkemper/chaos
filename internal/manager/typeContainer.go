@@ -507,17 +507,17 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 
 	el.statsThread()
 
-	if el.testTimeout != 0 {
-		var timeout = time.NewTimer(el.testTimeout)
-		go func() {
-			select {
-			case <-timeout.C:
-				el.manager.Done <- struct{}{}
-			}
-		}()
-	}
-
-	<-el.manager.Done
+	//if el.testTimeout != 0 {
+	//  var timeout = time.NewTimer(el.testTimeout)
+	//  go func() {
+	//    select {
+	//    case <-timeout.C:
+	//      el.manager.Done <- struct{}{}
+	//    }
+	//  }()
+	//}
+	//
+	//<-el.manager.Done
 
 	return el
 }
@@ -754,7 +754,6 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 		return el
 	}
 
-	// todo: definir
 	if el.autoDockerfile == nil {
 		el.autoDockerfile = new(dockerfileGolang.DockerfileGolang)
 	}
@@ -762,12 +761,6 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 	if !strings.Contains(containerName, "delete") {
 		containerName = "delete_" + containerName
 	}
-
-	//el.imageId, err = el.manager.DockerSys[0].ImageFindIdByName(el.imageName)
-	//if err != nil {
-	//  el.manager.ErrorCh <- fmt.Errorf("container.Create().ImageFindIdByName().error: %v", err)
-	//  return el
-	//}
 
 	el.failLogsLastSize = make([]int, copies)
 	// adjust image name to have version tag
@@ -777,189 +770,10 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 
 	var config = el.manager.DockerSys[0].GetConfig()
 
-	switch el.command {
-	case "fromFolder":
-		el.imageId, _ = el.manager.DockerSys[0].ImageFindIdByName(el.imageName)
-		if el.imageId != "" && el.imageExpirationTimeIsValid() == true {
-			return
-		}
-
-		if el.buildPath == "" {
-			el.manager.ErrorCh <- fmt.Errorf("set build folder path first")
-			return el
-		}
-
-		//if el.replaceBeforeBuild != nil {
-		var tmpDir string
-		tmpDir, err = os.MkdirTemp("", "chaos__")
-		if err != nil {
-			el.manager.ErrorCh <- fmt.Errorf("container.Create().CreateTemp().error: %v", err)
-			return el
-		}
-		defer func() {
-			_ = os.RemoveAll(tmpDir)
-		}()
-
-		el.buildPath, err = filepath.Abs(el.buildPath)
-		if err != nil {
-			el.manager.ErrorCh <- fmt.Errorf("container.Create().filepath.Abs().error: %v", err)
-			return el
-		}
-
-		err = utilCopy.Dir(tmpDir, el.buildPath)
-		if err != nil {
-			el.manager.ErrorCh <- fmt.Errorf("container.Create().utilCopy.Dir(0).error: %v", err)
-			return el
-		}
-
-		var fileInfo os.FileInfo
-		//var replaceBeforeBuildSource string
-		for k := range el.replaceBeforeBuild {
-
-			fileInfo, err = os.Stat(el.replaceBeforeBuild[k][kSrc])
-			if err != nil {
-				el.manager.ErrorCh <- fmt.Errorf("container.Create().os.Stat().error: %v", err)
-				return el
-			}
-
-			if fileInfo.IsDir() {
-				err = utilCopy.Dir(filepath.Join(tmpDir, el.replaceBeforeBuild[k][kDst]), el.replaceBeforeBuild[k][kSrc])
-				if err != nil {
-					el.manager.ErrorCh <- fmt.Errorf("container.Create().utilCopy.Dir(1).error: %v", err)
-					return el
-				}
-			} else {
-				err = utilCopy.File(filepath.Join(tmpDir, el.replaceBeforeBuild[k][kDst]), el.replaceBeforeBuild[k][kSrc])
-				if err != nil {
-					el.manager.ErrorCh <- fmt.Errorf("container.Create().utilCopy.File(0).error: %v", err)
-					return el
-				}
-			}
-		}
-
-		el.buildPath = tmpDir
-		//} else {
-		//  el.buildPath, err = filepath.Abs(el.buildPath)
-		//  if err != nil {
-		//    el.manager.ErrorCh <- fmt.Errorf("container.Create().filepath.Abs().error: %v", err)
-		//    return el
-		//  }
-		//}
-
-		var volumes = make([]mount.Mount, 0)
-
-		if el.makeDefaultDockerfile == true {
-			var dockerfile string
-			var fileList []fs.FileInfo
-
-			fileList, err = ioutil.ReadDir(el.buildPath)
-			if err != nil {
-				el.manager.ErrorCh <- fmt.Errorf("container.Create().ioutil.ReadDir().error: %v", err)
-				return el
-			}
-
-			// fixme: modificar isto
-			// deve ir para a interface{} fazer a verificação
-			var pass = false
-			for _, file := range fileList {
-				if file.Name() == "go.mod" {
-					pass = true
-					break
-				}
-			}
-			if pass == false {
-				el.manager.ErrorCh <- errors.New("go.mod file not found")
-				return el
-			}
-
-			if el.enableCache == true {
-				_, err = el.manager.DockerSys[0].ImageFindIdByName(el.imageCacheName)
-				if err != nil && err.Error() == "image name not found" {
-					err = nil
-					el.enableCache = false
-				}
-				if err != nil {
-					el.manager.ErrorCh <- fmt.Errorf("container.Create().ImageFindIdByName().error: %v", err)
-					return el
-				}
-			}
-
-			dockerfile, err = el.autoDockerfile.MountDefaultDockerfile(
-				el.manager.ImageBuildOptions.BuildArgs,
-				el.portsContainer,
-				volumes,
-				el.makeDefaultDockerfileExtras,
-				el.enableCache,
-				el.imageCacheName,
-			)
-			if err != nil {
-				el.manager.ErrorCh <- fmt.Errorf("container.Create().autoDockerfile.MountDefaultDockerfile().error: %v", err)
-				return el
-			}
-
-			var dockerfilePath = filepath.Join(el.buildPath, "Dockerfile-iotmaker")
-			err = ioutil.WriteFile(dockerfilePath, []byte(dockerfile), os.ModePerm)
-			if err != nil {
-				el.manager.ErrorCh <- fmt.Errorf("container.Create().ioutil.WriteFile().error: %v", err)
-				return el
-			}
-		}
-
-		el.autoDockerfile.Prayer()
-
-		var changePointer = make(chan builder.ContainerPullStatusSendToChannel)
-		go func(ch *chan builder.ContainerPullStatusSendToChannel) {
-			for {
-
-				select {
-				case event := <-*ch:
-					var stream = event.Stream
-					stream = strings.ReplaceAll(stream, "\n", "")
-					stream = strings.ReplaceAll(stream, "\r", "")
-					stream = strings.Trim(stream, " ")
-
-					if stream == "" {
-						continue
-					}
-
-					log.Printf("%v", stream)
-
-					if event.Closed == true {
-						return
-					}
-				}
-			}
-		}(&changePointer)
-
-		el.imageId, err = el.manager.DockerSys[0].ImageBuildFromFolder(
-			el.buildPath,
-			el.imageName,
-			[]string{},
-			el.manager.ImageBuildOptions,
-			&changePointer,
-		)
-		if err != nil {
-			el.manager.ErrorCh <- fmt.Errorf("container.Create().ImageBuildFromFolder().error: %v", err)
-			return
-		}
-
-		if el.imageId == "" {
-			el.manager.ErrorCh <- fmt.Errorf("container.Create().ImageBuildFromFolder().error: %v", "image ID was not generated")
-			return
-		}
-
-		// Construir uma imagem de múltiplas etapas deixa imagens grandes e sem serventia, ocupando espaço no HD.
-		_ = el.manager.DockerSys[0].ImageGarbageCollector()
-		//if err != nil {
-		//	return
-		//}
-
-	case "fromImage":
-		// if the image does not exist, download the image
-		if err = el.imagePull(); err != nil {
-			el.manager.ErrorCh <- fmt.Errorf("container.Create().imagePull().error: %v", err)
-			return el
-		}
+	err = el.imageBuild()
+	if err != nil {
+		el.manager.ErrorCh <- fmt.Errorf("container.Create().imageBuild().error: %v", err)
+		return el
 	}
 
 	var ipAddress string
@@ -986,27 +800,8 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 		}
 
 		// map the port container:host[copiesKey]
-		var portConfig = nat.PortMap{}
-		for kContainer := range el.portsContainer {
-			portBind := make([]nat.PortBinding, 0)
-			if len(el.portsHost[kContainer]) > iCopy && el.portsHost[kContainer][iCopy] > 0 {
-				portBind = append(portBind, nat.PortBinding{HostPort: strconv.FormatInt(el.portsHost[kContainer][iCopy], 10)})
-			}
-
-			portConfig[el.portsContainer[kContainer]] = portBind
-		}
-
-		var volumes = make([]mount.Mount, 0)
-		for k := range el.volumeContainer {
-			volume := mount.Mount{}
-			if len(el.volumeContainer[k]) > iCopy && el.volumeHost[k][iCopy] != "" {
-				volume.Type = builder.KVolumeMountTypeBindString
-				volume.Source = el.volumeHost[k][iCopy]
-				volume.Target = el.volumeContainer[k]
-
-				volumes = append(volumes, volume)
-			}
-		}
+		var portConfig = el.mapContainerPorts(iCopy)
+		var volumes = el.mapVolumes(iCopy)
 
 		config.Image = el.imageName
 
@@ -1046,6 +841,273 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 	}
 
 	return el
+}
+
+func (el *ContainerFromImage) mapVolumes(iCopy int) (volumes []mount.Mount) {
+	volumes = make([]mount.Mount, 0)
+
+	for k := range el.volumeContainer {
+		volume := mount.Mount{}
+		if len(el.volumeContainer[k]) > iCopy && el.volumeHost[k][iCopy] != "" {
+			volume.Type = builder.KVolumeMountTypeBindString
+			volume.Source = el.volumeHost[k][iCopy]
+			volume.Target = el.volumeContainer[k]
+
+			volumes = append(volumes, volume)
+		}
+	}
+
+	return
+}
+
+// mapContainerPorts
+//
+// Maps container ports
+func (el *ContainerFromImage) mapContainerPorts(iCopy int) (portConfig nat.PortMap) {
+	// map the port container:host[copiesKey]
+	for kContainer := range el.portsContainer {
+		portBind := make([]nat.PortBinding, 0)
+		if len(el.portsHost[kContainer]) > iCopy && el.portsHost[kContainer][iCopy] > 0 {
+			portBind = append(portBind, nat.PortBinding{HostPort: strconv.FormatInt(el.portsHost[kContainer][iCopy], 10)})
+		}
+
+		portConfig[el.portsContainer[kContainer]] = portBind
+	}
+
+	return
+}
+
+// imageBuild
+//
+// project image build
+func (el *ContainerFromImage) imageBuild() (err error) {
+	switch el.command {
+	case "fromFolder":
+		if el.buildPath == "" {
+			err = fmt.Errorf("set build folder path first")
+			return
+		}
+
+		if el.checkImageExpirationTimeIsValid() {
+			return
+		}
+
+		var tmpDir string
+		tmpDir, err = el.copyBuildPathToTmpDir()
+		if err != nil {
+			err = fmt.Errorf("container.imageBuild().copyBuildPathToTmpDir().error: %v", err)
+			return
+		}
+		defer func() {
+			_ = os.RemoveAll(tmpDir)
+		}()
+
+		err = el.replaceFilesBeforeBuild(tmpDir)
+		if err != nil {
+			err = fmt.Errorf("container.imageBuild().replaceFilesBeforeBuild().error: %v", err)
+			return
+		}
+
+		el.buildPath = tmpDir
+
+		var volumes = make([]mount.Mount, 0)
+		err = el.makeDefaultDockerfileForMe(volumes)
+		if err != nil {
+			err = fmt.Errorf("container.imageBuild().makeDefaultDockerfileForMe().error: %v", err)
+			return
+		}
+
+		el.autoDockerfile.Prayer()
+
+		var changePointer = make(chan builder.ContainerPullStatusSendToChannel)
+		go el.imageBuildStdOutputToLogOutput(&changePointer)
+
+		el.imageId, err = el.manager.DockerSys[0].ImageBuildFromFolder(
+			el.buildPath,
+			el.imageName,
+			[]string{},
+			el.manager.ImageBuildOptions,
+			&changePointer,
+		)
+		if err != nil {
+			err = fmt.Errorf("container.imageBuild().ImageBuildFromFolder().error: %v", err)
+			return
+		}
+
+		if el.imageId == "" {
+			err = fmt.Errorf("container.imageBuild().ImageBuildFromFolder().error: %v", "image ID was not generated")
+			return
+		}
+
+		// Construir uma imagem de múltiplas etapas deixa imagens grandes e sem serventia, ocupando espaço no HD.
+		_ = el.manager.DockerSys[0].ImageGarbageCollector()
+
+	case "fromImage":
+		// if the image does not exist, download the image
+		if err = el.imagePull(); err != nil {
+			err = fmt.Errorf("container.imageBuild().imagePull().error: %v", err)
+			return
+		}
+	}
+
+	return
+}
+
+// imageBuildStdOutputToLogOutput
+//
+// Turns the container's standard output into a log during the image creation or download process
+func (el *ContainerFromImage) imageBuildStdOutputToLogOutput(ch *chan builder.ContainerPullStatusSendToChannel) {
+
+	for {
+		select {
+		case event := <-*ch:
+			var stream = event.Stream
+			stream = strings.ReplaceAll(stream, "\n", "")
+			stream = strings.ReplaceAll(stream, "\r", "")
+			stream = strings.Trim(stream, " ")
+
+			if stream == "" {
+				continue
+			}
+
+			log.Printf("%v", stream)
+
+			if event.Closed == true {
+				return
+			}
+		}
+	}
+}
+
+// makeDefaultDockerfileForMe
+//
+// When enabled by the user, it mounts the dockerfile automatically. Requires a go.mod file in the project root
+func (el *ContainerFromImage) makeDefaultDockerfileForMe(volumes []mount.Mount) (err error) {
+	if !el.makeDefaultDockerfile {
+		return
+	}
+
+	var dockerfile string
+	var fileList []fs.FileInfo
+
+	fileList, err = ioutil.ReadDir(el.buildPath)
+	if err != nil {
+		err = fmt.Errorf("container.makeDefaultDockerfileForMe().ioutil.ReadDir().error: %v", err)
+		return
+	}
+
+	// fixme: modificar isto
+	// deve ir para a interface{} fazer a verificação
+	var pass = false
+	for _, file := range fileList {
+		if file.Name() == "go.mod" {
+			pass = true
+			break
+		}
+	}
+	if pass == false {
+		err = errors.New("go.mod file not found")
+		return
+	}
+
+	if el.enableCache == true && el.manager.ImageBuildOptions.NoCache != true {
+		_, err = el.manager.DockerSys[0].ImageFindIdByName(el.imageCacheName)
+		if err != nil && err.Error() == "image name not found" { //todo: isto deveria ser um var inf = errors.New("image name not found")
+			err = nil
+			el.enableCache = false
+		}
+		if err != nil {
+			err = fmt.Errorf("container.makeDefaultDockerfileForMe().ImageFindIdByName().error: %v", err)
+			return
+		}
+	}
+
+	dockerfile, err = el.autoDockerfile.MountDefaultDockerfile(
+		el.manager.ImageBuildOptions.BuildArgs,
+		el.portsContainer,
+		volumes,
+		el.makeDefaultDockerfileExtras,
+		el.enableCache,
+		el.imageCacheName,
+	)
+	if err != nil {
+		err = fmt.Errorf("container.makeDefaultDockerfileForMe().autoDockerfile.MountDefaultDockerfile().error: %v", err)
+		return
+	}
+
+	var dockerfilePath = filepath.Join(el.buildPath, "Dockerfile-iotmaker")
+	err = ioutil.WriteFile(dockerfilePath, []byte(dockerfile), os.ModePerm)
+	if err != nil {
+		err = fmt.Errorf("container.makeDefaultDockerfileForMe().ioutil.WriteFile().error: %v", err)
+		return
+	}
+
+	return
+}
+
+// replaceFilesBeforeBuild
+//
+// Copies files and folders defined before testing into the project folder
+func (el *ContainerFromImage) replaceFilesBeforeBuild(tmpDir string) (err error) {
+	var fileInfo os.FileInfo
+	for k := range el.replaceBeforeBuild {
+
+		fileInfo, err = os.Stat(el.replaceBeforeBuild[k][kSrc])
+		if err != nil {
+			err = fmt.Errorf("container.replaceFilesBeforeBuild().Stat().error: %v", err)
+			return
+		}
+
+		if fileInfo.IsDir() {
+			err = utilCopy.Dir(filepath.Join(tmpDir, el.replaceBeforeBuild[k][kDst]), el.replaceBeforeBuild[k][kSrc])
+			if err != nil {
+				err = fmt.Errorf("container.replaceFilesBeforeBuild().utilCopy.Dir(1).error: %v", err)
+				return
+			}
+		} else {
+			err = utilCopy.File(filepath.Join(tmpDir, el.replaceBeforeBuild[k][kDst]), el.replaceBeforeBuild[k][kSrc])
+			if err != nil {
+				err = fmt.Errorf("container.replaceFilesBeforeBuild().utilCopy.File(0).error: %v", err)
+				return
+			}
+		}
+	}
+
+	return
+}
+
+// checkImageExpirationTimeIsValid
+//
+// Checks the image validity time to not recreate the same image in the same test
+func (el *ContainerFromImage) checkImageExpirationTimeIsValid() (isValid bool) {
+	el.imageId, _ = el.manager.DockerSys[0].ImageFindIdByName(el.imageName)
+	return el.imageId != "" && el.imageExpirationTimeIsValid() == true
+}
+
+// copyBuildPathToTmpDir
+//
+// Create a temporary directory and copy the project to it, before making the image.
+// This allows changing project files without damaging the original project.
+func (el *ContainerFromImage) copyBuildPathToTmpDir() (tmpDir string, err error) {
+	tmpDir, err = os.MkdirTemp("", "chaos__")
+	if err != nil {
+		err = fmt.Errorf("container.copyBuildPathToTmpDir().MkdirTemp().error: %v", err)
+		return
+	}
+
+	el.buildPath, err = filepath.Abs(el.buildPath)
+	if err != nil {
+		err = fmt.Errorf("container.copyBuildPathToTmpDir().Abs().error: %v", err)
+		return
+	}
+
+	err = utilCopy.Dir(tmpDir, el.buildPath)
+	if err != nil {
+		err = fmt.Errorf("container.copyBuildPathToTmpDir().Dir().error: %v", err)
+		return
+	}
+
+	return
 }
 
 // imageExpirationTimeIsValid
@@ -1595,6 +1657,7 @@ func (el *ContainerFromImage) Platform(value string) {
 //
 //	Define a opção `sem cache` para a construção da imagem
 func (el *ContainerFromImage) NoCache() {
+	el.enableCache = false
 	el.manager.ImageBuildOptions.NoCache = true
 }
 
@@ -2075,5 +2138,13 @@ func (el *ContainerFromImage) Period(value int64) (ref *ContainerFromImage) { //
 // Define um arquivo Dockerfile para construir a imagem.
 func (el *ContainerFromImage) DockerfilePath(path string) (ref *ContainerFromImage) {
 	el.manager.ImageBuildOptions.Dockerfile = path
+	return el
+}
+
+// AutoDockerfileGenerator
+//
+// Defines the dockerfile generator object
+func (el *ContainerFromImage) AutoDockerfileGenerator(autoDockerfile DockerfileAuto) (ref *ContainerFromImage) {
+	el.autoDockerfile = autoDockerfile
 	return el
 }
