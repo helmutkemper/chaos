@@ -43,6 +43,7 @@ type containerCommon struct {
 
 	imageExpirationTime time.Duration
 	buildPath           string
+	serverPath          string
 	replaceBeforeBuild  [][]string
 	command             string
 	imageId             string
@@ -75,13 +76,16 @@ type ContainerFromImage struct {
 	containerCommon
 }
 
-func (el *ContainerFromImage) New(manager *Manager) {
-	el.manager = manager
-}
+//func (el *ContainerFromImage) New(manager *Manager) {
+//	el.manager = manager
+//}
 
-func (el *ContainerFromImage) MakeDockerfile(extras bool) (ref *ContainerFromImage) {
+// MakeDockerfile
+//
+// Mounts a standard Dockerfile automatically
+func (el *ContainerFromImage) MakeDockerfile() (ref *ContainerFromImage) {
 	el.makeDefaultDockerfile = true
-	el.makeDefaultDockerfileExtras = extras
+	el.makeDefaultDockerfileExtras = true
 
 	return el
 }
@@ -356,7 +360,7 @@ func (el *ContainerFromImage) StopSignal(signal string) (ref *ContainerFromImage
 
 // StopTimeout
 //
-// Timeout to stop a container
+// Timeout to stop the container after command `container.Stop()`
 func (el *ContainerFromImage) StopTimeout(timeout time.Duration) (ref *ContainerFromImage) {
 	timeoutRef := int(timeout)
 	el.manager.DockerSys[0].Config.StopTimeout = &timeoutRef
@@ -433,6 +437,9 @@ func (el *ContainerFromImage) SaveStatistics(path string) (ref *ContainerFromIma
 	return el
 }
 
+// ReplaceBeforeBuild
+//
+// Replaces or adds files to the project, in the temporary folder, before the image is created.
 func (el *ContainerFromImage) ReplaceBeforeBuild(dst, src string) (ref *ContainerFromImage) {
 	var err error
 	if el.replaceBeforeBuild == nil {
@@ -450,11 +457,21 @@ func (el *ContainerFromImage) ReplaceBeforeBuild(dst, src string) (ref *Containe
 	return el
 }
 
+// TestDuration
+//
+// Defines the duration of the test
 func (el *ContainerFromImage) TestDuration(timeout time.Duration) (ref *ContainerFromImage) {
-	el.testTimeout = timeout
+	el.testTimeout = timeout //todo: fazer
 	return el
 }
 
+// FailFlag
+//
+// Define um texto, que quando encontrado na saída padrão do container, define o teste como falho.
+//
+//	Input:
+//	  path: path to save the container standard output
+//	  flags: texts to be searched for in the container standard output
 func (el *ContainerFromImage) FailFlag(path string, flags ...string) (ref *ContainerFromImage) {
 	var err error
 	var fileInfo os.FileInfo
@@ -474,6 +491,9 @@ func (el *ContainerFromImage) FailFlag(path string, flags ...string) (ref *Conta
 	return el
 }
 
+// Start
+//
+// Start the container after build
 func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 	var err error
 
@@ -522,6 +542,9 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 	return el
 }
 
+// failFlagThread
+//
+// ticker that monitors the standard output of the container looking for test failure flags
 func (el *ContainerFromImage) failFlagThread() {
 	var err error
 	var logs []byte
@@ -605,6 +628,9 @@ func (el *ContainerFromImage) logsSearchAndReplaceIntoText(key int, logs *[]byte
 	return
 }
 
+// statsThread
+//
+// Inspects the container and saves container statistics information to a CSV file every 10 seconds
 func (el *ContainerFromImage) statsThread() {
 	var err error
 	el.manager.TickerStats = time.NewTicker(10 * time.Second)
@@ -747,6 +773,15 @@ func (el *ContainerFromImage) statsThread() {
 	}()
 }
 
+// Create
+//
+// Cria o container.
+//
+// Before this function is called, all settings functions must have been defined.
+//
+//	Input:
+//	  containerName: name from container
+//	  copies: number total of containers
 func (el *ContainerFromImage) Create(containerName string, copies int) (ref *ContainerFromImage) {
 	var err error
 
@@ -843,6 +878,9 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 	return el
 }
 
+// mapVolumes
+//
+// Mount the container volumes
 func (el *ContainerFromImage) mapVolumes(iCopy int) (volumes []mount.Mount) {
 	volumes = make([]mount.Mount, 0)
 
@@ -882,7 +920,7 @@ func (el *ContainerFromImage) mapContainerPorts(iCopy int) (portConfig nat.PortM
 // project image build
 func (el *ContainerFromImage) imageBuild() (err error) {
 	switch el.command {
-	case "fromGit":
+	case "fromServer":
 
 	case "fromFolder":
 		if el.buildPath == "" {

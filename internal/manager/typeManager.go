@@ -116,6 +116,19 @@ func (el *Manager) ContainerFromFolder(imageName, buildPath string) (containerFr
 	return
 }
 
+func (el *Manager) ContainerFromServer(imageName, serverPath string) (containerFromImage *ContainerFromImage) {
+	if !strings.Contains(imageName, "delete") {
+		imageName = "delete_" + imageName
+	}
+
+	containerFromImage = new(ContainerFromImage)
+	containerFromImage.manager = el
+	containerFromImage.serverPath = serverPath
+	containerFromImage.imageName = imageName
+	containerFromImage.command = "fromServer" //fixme: contante
+	return
+}
+
 //
 //
 //
