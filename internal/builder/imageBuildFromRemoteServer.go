@@ -34,7 +34,7 @@ func (el *DockerSystem) ImageBuildFromRemoteServer(
 	imageName string,
 	tags []string,
 	imageBuildOptions types.ImageBuildOptions,
-	channel *chan ContainerPullStatusSendToChannel,
+	channel chan ContainerPullStatusSendToChannel,
 ) (
 	imageID string,
 	err error,

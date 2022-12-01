@@ -117,7 +117,7 @@ func ExampleDockerSystem_ContainerExecCommand() {
 		"image_server_delete_before_test:latest",
 		[]string{},
 		types.ImageBuildOptions{},
-		&chStatus, // [channel|nil]
+		chStatus, // [channel|nil]
 	)
 	if err != nil {
 		panic(err)
@@ -137,7 +137,7 @@ func ExampleDockerSystem_ContainerExecCommand() {
 
 	// English: mount and start a container
 	// Português: monta i inicializa o container
-	containerId, err = dockerSys.ContainerCreateWithConfig(
+	containerId, _, err = dockerSys.ContainerCreateWithConfig(
 		// image name
 		&container.Config{
 			Image: "image_server_delete_before_test:latest",

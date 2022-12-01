@@ -10,11 +10,12 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	networkTypes "github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	sshGit "github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/helmutkemper/chaos/internal/builder"
 	"github.com/helmutkemper/chaos/internal/dockerfileGolang"
 	"github.com/helmutkemper/chaos/internal/util/utilCopy"
-	"github.com/helmutkemper/util"
 	"io/fs"
 	"io/ioutil"
 	"log"
@@ -81,6 +82,7 @@ type containerCommon struct {
 
 	gitUrl               string
 	gitPrivateToke       string
+	gitUser              string
 	gitPassword          string
 	gitSshPrivateKeyPath string
 }
@@ -915,6 +917,8 @@ func (el *ContainerFromImage) mapVolumes(iCopy int) (volumes []mount.Mount) {
 //
 // Maps container ports
 func (el *ContainerFromImage) mapContainerPorts(iCopy int) (portConfig nat.PortMap) {
+	portConfig = make(map[nat.Port][]nat.PortBinding)
+
 	// map the port container:host[copiesKey]
 	for kContainer := range el.portsContainer {
 		portBind := make([]nat.PortBinding, 0)
@@ -934,6 +938,94 @@ func (el *ContainerFromImage) mapContainerPorts(iCopy int) (portConfig nat.PortM
 func (el *ContainerFromImage) imageBuild() (err error) {
 	switch el.command {
 	case "fromServer":
+		if el.serverPath == "" {
+			err = fmt.Errorf("set server path first")
+			return
+		}
+
+		if el.checkImageExpirationTimeIsValid() {
+			return
+		}
+
+		var tmpDir string
+		var publicKeys *sshGit.PublicKeys
+		var gitCloneConfig *git.CloneOptions
+		publicKeys, err = el.gitMakePublicSshKey()
+		if err != nil {
+			err = fmt.Errorf("container.imageBuild().gitMakePublicSshKey().error: %v", err)
+			return
+		}
+
+		tmpDir, err = el.makeTmpDir()
+		if err != nil {
+			err = fmt.Errorf("container.imageBuild().makeTmpDir().error: %v", err)
+			return
+		}
+		defer func() {
+			_ = os.RemoveAll(tmpDir)
+		}()
+
+		if el.gitSshPrivateKeyPath != "" || el.contentIdRsaFile != "" {
+			gitCloneConfig = &git.CloneOptions{
+				URL:      el.gitUrl,
+				Auth:     publicKeys,
+				Progress: nil,
+			}
+		} else if el.gitPrivateToke != "" {
+			gitCloneConfig = &git.CloneOptions{
+				// The intended use of a GitHub personal access token is in replace of your password
+				// because access tokens can easily be revoked.
+				// https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/
+				Auth: &http.BasicAuth{
+					Username: "abc123", // yes, this can be anything except an empty string
+					Password: el.gitPrivateToke,
+				},
+				URL:      el.gitUrl,
+				Progress: nil,
+			}
+		} else if el.gitUser != "" && el.gitPassword != "" {
+			gitCloneConfig = &git.CloneOptions{
+				Auth: &http.BasicAuth{
+					Username: el.gitUser,
+					Password: el.gitPassword,
+				},
+				URL:      el.gitUrl,
+				Progress: nil,
+			}
+		} else {
+			gitCloneConfig = &git.CloneOptions{
+				URL:      el.gitUrl,
+				Progress: nil,
+			}
+		}
+
+		_, err = git.PlainClone(tmpDir, false, gitCloneConfig)
+		if err != nil {
+			err = fmt.Errorf("container.imageBuild().PlainClone().error: %v", err)
+			return
+		}
+
+		err = el.replaceFilesBeforeBuild(tmpDir)
+		if err != nil {
+			err = fmt.Errorf("container.imageBuild().replaceFilesBeforeBuild().error: %v", err)
+			return
+		}
+
+		el.buildPath = tmpDir
+
+		var volumes = make([]mount.Mount, 0)
+		err = el.makeDefaultDockerfileForMe(volumes)
+		if err != nil {
+			err = fmt.Errorf("container.imageBuild().makeDefaultDockerfileForMe().error: %v", err)
+			return
+		}
+
+		el.autoDockerfile.Prayer()
+
+		var changePointer = make(chan builder.ContainerPullStatusSendToChannel)
+		go el.imageBuildStdOutputToLogOutput(changePointer)
+
+		el.manager.DockerSys[0].ImageBuildFromRemoteServer()
 
 	case "fromFolder":
 		if el.buildPath == "" {
@@ -973,14 +1065,14 @@ func (el *ContainerFromImage) imageBuild() (err error) {
 		el.autoDockerfile.Prayer()
 
 		var changePointer = make(chan builder.ContainerPullStatusSendToChannel)
-		go el.imageBuildStdOutputToLogOutput(&changePointer)
+		go el.imageBuildStdOutputToLogOutput(changePointer)
 
 		el.imageId, err = el.manager.DockerSys[0].ImageBuildFromFolder(
 			el.buildPath,
 			el.imageName,
 			[]string{},
 			el.manager.ImageBuildOptions,
-			&changePointer,
+			changePointer,
 		)
 		if err != nil {
 			err = fmt.Errorf("container.imageBuild().ImageBuildFromFolder().error: %v", err)
@@ -1009,11 +1101,11 @@ func (el *ContainerFromImage) imageBuild() (err error) {
 // imageBuildStdOutputToLogOutput
 //
 // Turns the container's standard output into a log during the image creation or download process
-func (el *ContainerFromImage) imageBuildStdOutputToLogOutput(ch *chan builder.ContainerPullStatusSendToChannel) {
+func (el *ContainerFromImage) imageBuildStdOutputToLogOutput(ch chan builder.ContainerPullStatusSendToChannel) {
 
 	for {
 		select {
-		case event := <-*ch:
+		case event := <-ch:
 			var stream = event.Stream
 			stream = strings.ReplaceAll(stream, "\n", "")
 			stream = strings.ReplaceAll(stream, "\r", "")
@@ -1137,14 +1229,27 @@ func (el *ContainerFromImage) checkImageExpirationTimeIsValid() (isValid bool) {
 	return el.imageId != "" && el.imageExpirationTimeIsValid() == true
 }
 
+// makeTmpDir
+//
+// make a tmp dir
+func (el *ContainerFromImage) makeTmpDir() (tmpDir string, err error) {
+	tmpDir, err = os.MkdirTemp("", "chaos__")
+	if err != nil {
+		err = fmt.Errorf("container.makeTmpDir().error: %v", err)
+		return
+	}
+
+	return
+}
+
 // copyBuildPathToTmpDir
 //
 // Create a temporary directory and copy the project to it, before making the image.
 // This allows changing project files without damaging the original project.
 func (el *ContainerFromImage) copyBuildPathToTmpDir() (tmpDir string, err error) {
-	tmpDir, err = os.MkdirTemp("", "chaos__")
+	tmpDir, err = el.makeTmpDir()
 	if err != nil {
-		err = fmt.Errorf("container.copyBuildPathToTmpDir().MkdirTemp().error: %v", err)
+		err = fmt.Errorf("container.copyBuildPathToTmpDir().makeTmpDir().error: %v", err)
 		return
 	}
 
@@ -1247,7 +1352,7 @@ func (el *ContainerFromImage) imagePull() (err error) {
 	}()
 
 	// docker pull
-	el.imageId, el.imageName, err = el.manager.DockerSys[0].ImagePull(el.imageName, &chStatus)
+	el.imageId, el.imageName, err = el.manager.DockerSys[0].ImagePull(el.imageName, chStatus)
 	if err != nil {
 		err = fmt.Errorf("containerFromImage.Primordial().imagePull().error: %v", err)
 		return
@@ -2254,7 +2359,7 @@ func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (err error) {
 	filePathToRead = filepath.Join(userData.HomeDir, ".ssh", "known_hosts")
 	fileData, err = ioutil.ReadFile(filePathToRead)
 	if err != nil {
-		util.TraceToLog()
+		err = fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile().error: %v", err)
 		return
 	}
 
@@ -2264,7 +2369,7 @@ func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (err error) {
 	filePathToRead = filepath.Join(userData.HomeDir, ".gitconfig")
 	fileData, err = ioutil.ReadFile(filePathToRead)
 	if err != nil {
-		util.TraceToLog()
+		err = fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile().error: %v", err)
 		return
 	}
 
@@ -2695,19 +2800,26 @@ func (el *ContainerFromImage) gitMakePublicSshKey() (publicKeys *sshGit.PublicKe
 	if el.gitSshPrivateKeyPath != "" {
 		_, err = os.Stat(el.gitSshPrivateKeyPath)
 		if err != nil {
-			util.TraceToLog()
+			err = fmt.Errorf("container.gitMakePublicSshKey().Stat().error: %v", err)
 			return
 		}
 		publicKeys, err = sshGit.NewPublicKeysFromFile("git", el.gitSshPrivateKeyPath, el.gitPassword)
+		if err != nil {
+			err = fmt.Errorf("container.gitMakePublicSshKey().NewPublicKeysFromFile().error: %v", err)
+			return
+		}
 	} else if el.contentIdEcdsaFile != "" {
 		publicKeys, err = sshGit.NewPublicKeys("git", []byte(el.contentIdEcdsaFile), el.gitPassword)
+		if err != nil {
+			err = fmt.Errorf("container.gitMakePublicSshKey().NewPublicKeys().error: %v", err)
+			return
+		}
 	} else if el.contentIdRsaFile != "" {
 		publicKeys, err = sshGit.NewPublicKeys("git", []byte(el.contentIdRsaFile), el.gitPassword)
-	}
-
-	if err != nil {
-		util.TraceToLog()
-		return
+		if err != nil {
+			err = fmt.Errorf("container.gitMakePublicSshKey().NewPublicKeys().error: %v", err)
+			return
+		}
 	}
 
 	return

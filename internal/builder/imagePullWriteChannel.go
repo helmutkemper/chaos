@@ -1,18 +1,18 @@
 package builder
 
 func (el *DockerSystem) imagePullWriteChannel(
-	progressChannel *chan ContainerPullStatusSendToChannel,
+	progressChannel chan ContainerPullStatusSendToChannel,
 	data ContainerPullStatusSendToChannel,
 ) {
 
-	if *progressChannel == nil {
+	if progressChannel == nil {
 		return
 	}
 
-	l := len(*progressChannel)
+	l := len(progressChannel)
 	if l != 0 {
 		return
 	}
 
-	*progressChannel <- data
+	progressChannel <- data
 }

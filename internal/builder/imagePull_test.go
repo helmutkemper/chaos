@@ -63,7 +63,7 @@ func ExampleDockerSystem_ImagePull() {
 
 	imageId, imageName, err = dockerSys.ImagePull(
 		"alpine:latest",
-		&chStatus, // [channel|nil]
+		chStatus, // [channel|nil]
 	)
 	if err != nil {
 		panic(err)

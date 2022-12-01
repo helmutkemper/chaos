@@ -8,7 +8,7 @@ import (
 
 func (el *DockerSystem) ImagePull(
 	name string,
-	channel *chan ContainerPullStatusSendToChannel,
+	channel chan ContainerPullStatusSendToChannel,
 ) (
 	imageId string,
 	imageName string,

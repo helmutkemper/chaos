@@ -18,7 +18,7 @@ type aux struct {
 
 func (el *DockerSystem) processBuildAndPullReaders(
 	reader *io.Reader,
-	channel *chan ContainerPullStatusSendToChannel,
+	channel chan ContainerPullStatusSendToChannel,
 ) (
 	successfully bool,
 	err error,

@@ -80,7 +80,7 @@ func ExampleDockerSystem_VolumeRemove() {
 		"image_server_delete_before_test:latest",
 		[]string{},
 		types.ImageBuildOptions{},
-		&chStatus, // [channel|nil]
+		chStatus, // [channel|nil]
 	)
 	if err != nil {
 		panic(err)
