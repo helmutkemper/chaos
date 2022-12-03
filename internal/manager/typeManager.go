@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/docker/docker/api/types"
 	"github.com/helmutkemper/chaos/internal/builder"
+	"github.com/helmutkemper/chaos/internal/monitor"
 	"strings"
 	"time"
 )
@@ -66,19 +67,24 @@ type Manager struct {
 	TickerFail        *time.Ticker
 	Id                []string
 	DockerSys         []*builder.DockerSystem
-	ErrorCh           chan error
 	ImageBuildOptions types.ImageBuildOptions
-	Done              chan struct{}
+
+	DoneCh  chan struct{}
+	ErrorCh chan error
+	FailCh  chan string
 }
 
-func (el *Manager) New(errorCh chan error) {
-	el.ErrorCh = errorCh
-
+func (el *Manager) New() {
 	var err error
 	el.Id = make([]string, 0)
 	el.DockerSys = make([]*builder.DockerSystem, 1)
 	el.DockerSys[0] = new(builder.DockerSystem)
-	el.Done = make(chan struct{})
+
+	el.DoneCh = make(chan struct{})
+	el.ErrorCh = make(chan error)
+	el.FailCh = make(chan string)
+
+	el.addMonitor()
 
 	err = el.DockerSys[0].Init()
 	if err != nil {
@@ -87,6 +93,12 @@ func (el *Manager) New(errorCh chan error) {
 	}
 
 	return
+}
+
+func (el *Manager) addMonitor() {
+	monitor.DoneChList = append(monitor.DoneChList, el.DoneCh)
+	monitor.ErrorChList = append(monitor.ErrorChList, el.ErrorCh)
+	monitor.FailChList = append(monitor.FailChList, el.FailCh)
 }
 
 func (el *Manager) Primordial() (primordial *Primordial) {
@@ -116,14 +128,14 @@ func (el *Manager) ContainerFromFolder(imageName, buildPath string) (containerFr
 	return
 }
 
-func (el *Manager) ContainerFromServer(imageName, serverPath string) (containerFromImage *ContainerFromImage) {
+func (el *Manager) ContainerFromGit(imageName, serverPath string) (containerFromImage *ContainerFromImage) {
 	if !strings.Contains(imageName, "delete") {
 		imageName = "delete_" + imageName
 	}
 
 	containerFromImage = new(ContainerFromImage)
 	containerFromImage.manager = el
-	containerFromImage.serverPath = serverPath
+	containerFromImage.gitUrl = serverPath
 	containerFromImage.imageName = imageName
 	containerFromImage.command = "fromServer" //fixme: contante
 	return

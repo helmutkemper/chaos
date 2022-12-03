@@ -8,20 +8,13 @@ import (
 
 func TestNetwork_NetworkCreate(t *testing.T) {
 	var err error
-	var errorCh = make(chan error)
-	go func(t *testing.T) {
-		err := <-errorCh
-		t.Error(err.Error())
-		t.Fail()
-	}(t)
-
 	standalone.GarbageCollector()
 	t.Cleanup(func() {
 		standalone.GarbageCollector()
 	})
 
 	mng := &Manager{}
-	mng.New(errorCh)
+	mng.New()
 
 	var id string
 	var data types.NetworkResource

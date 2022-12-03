@@ -1,6 +1,9 @@
 package manager
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/helmutkemper/chaos/internal/monitor"
+)
 
 type Primordial struct {
 	manager *Manager
@@ -29,6 +32,10 @@ func (el *Primordial) NetworkCreate(name, subnet, gateway string) (ref *Primordi
 	}
 
 	return el
+}
+
+func (el *Primordial) Monitor() (pass bool) {
+	return monitor.Monitor()
 }
 
 //

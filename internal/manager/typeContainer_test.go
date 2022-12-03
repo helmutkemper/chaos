@@ -3,37 +3,35 @@ package manager
 import (
 	"github.com/helmutkemper/chaos/internal/standalone"
 	"testing"
+	"time"
 )
 
 func TestContainerFromImage_Primordial(t *testing.T) {
-	var errorCh = make(chan error)
-	go func(t *testing.T) {
-		err := <-errorCh
-		t.Error(err.Error())
-		t.Fail()
-	}(t)
-
 	standalone.GarbageCollector()
 	t.Cleanup(func() {
 		standalone.GarbageCollector()
 	})
 
-	mongodb := &Manager{}
-	mongodb.New(errorCh)
+	manager := &Manager{}
+	manager.New()
 
-	mongodb.Primordial().
+	manager.Primordial().
 		NetworkCreate("delete_before_test", "10.0.0.0/16", "10.0.0.1")
-	mongodb.ContainerFromImage("mongo:latest").
+
+	private := &Manager{}
+	private.New()
+	private.ContainerFromGit("private", "git@github.com:helmutkemper/iotmaker.docker.builder.private.example.git").
 		SaveStatistics("../../").
-		FailFlag("../../bugs", "Multi threading initialized").
-		Ports("tcp", 27017, 27016, 27015, 27014).
-		Volumes("/data/db", "../../internal/builder/test/data0", "../../internal/builder/test/data1", "../../internal/builder/test/data2").
-		EnvironmentVar([]string{"--host 0.0.0.0"}).
-		Create("delete_mongo", 3).
+		PrivateRepositoryAutoConfig().
+		GitPathPrivateRepository("github.com/helmutkemper").
+		Healthcheck(30*time.Second, 30*time.Second, 30*time.Second, 1, "CMD", "ash", "curl --fail http://localhost:5000/").
+		Ports("tcp", 3000, 0, 3000).
+		MakeDockerfile().
+		Create("private", 1).
 		Start()
 
 	barco := &Manager{}
-	barco.New(errorCh)
+	barco.New()
 	barco.ContainerFromFolder("barco:latest", "/Users/kemper/go/projetos/barcocopy").
 		SaveStatistics("../../").
 		EnvironmentVar(
@@ -62,14 +60,24 @@ func TestContainerFromImage_Primordial(t *testing.T) {
 				"BARCO_ORDINAL=2",
 			},
 		).
-		FailFlag("../../bugs", "\"fatal\"").
-		FailFlag("../../bugs", "panic:").
+		FailFlag("../../bugs", "\"fatal\"", "panic:").
 		ReplaceBeforeBuild("/Dockerfile", "/Users/kemper/go/projetos/barcocopy/internal/test/chaos/simpleRestart/Dockerfile").
 		Create("delete_barco", 3).
 		Start()
 
-	done := make(chan struct{})
-	done <- struct{}{}
+	mongodb := &Manager{}
+	mongodb.New()
+	mongodb.ContainerFromImage("mongo:latest").
+		SaveStatistics("../../").
+		Ports("tcp", 27017, 27016, 27015, 27014).
+		Volumes("/data/db", "../../internal/builder/test/data0", "../../internal/builder/test/data1", "../../internal/builder/test/data2").
+		EnvironmentVar([]string{"--host 0.0.0.0"}).
+		Create("delete_mongo", 1).
+		Start()
+
+	if !manager.Primordial().Monitor() {
+		t.Fail()
+	}
 }
 
 //

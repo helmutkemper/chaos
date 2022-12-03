@@ -48,7 +48,6 @@ type containerCommon struct {
 
 	imageExpirationTime time.Duration
 	buildPath           string
-	serverPath          string
 	replaceBeforeBuild  [][]string
 	command             string
 	imageId             string
@@ -91,10 +90,6 @@ type ContainerFromImage struct {
 	containerCommon
 }
 
-//func (el *ContainerFromImage) New(manager *Manager) {
-//	el.manager = manager
-//}
-
 // MakeDockerfile
 //
 // Mounts a standard Dockerfile automatically
@@ -127,35 +122,35 @@ func (el *ContainerFromImage) Volumes(containerPath string, hostPath ...string) 
 		el.volumeHost = make([][]string, 0)
 	}
 
-	var path string
-	var absolutePath []string
+	var absolutePath string
+	var absolutePathList []string
 	for k := range hostPath {
 		if hostPath[k] != "" {
-			path, err = filepath.Abs(hostPath[k])
+			absolutePath, err = filepath.Abs(hostPath[k])
 			if err != nil {
 				el.manager.ErrorCh <- fmt.Errorf("containerFromImage.Volumes().error: %v", err)
 				return el
 			}
 		} else {
-			path = ""
+			absolutePath = ""
 		}
 
-		absolutePath = append(absolutePath, path)
+		absolutePathList = append(absolutePathList, absolutePath)
 	}
 
 	el.volumeContainer = append(el.volumeContainer, containerPath)
-	el.volumeHost = append(el.volumeHost, absolutePath)
+	el.volumeHost = append(el.volumeHost, absolutePathList)
 	return el
 }
 
 // Ports
 //
-// Defines which port of the container will be exposed to the world
+// Defines, which port of the container will be exposed to the world
 //
 //	Input:
 //	  containerProtocol: network protocol `tcp` or `utc`
-//	  containerPort: port number on the container. eg: 27017 for MongoDB
-//	  localPort: port number on the host computer. eg: 27017 for MongoDB
+//	  containerPort: port number on the container. e.g., 27017 for MongoDB
+//	  localPort: port number on the host computer. e.g.,: 27017 for MongoDB
 //
 //	Notes:
 //	  * When `localPort` receives one more value, each container created will receive a different value.
@@ -183,8 +178,8 @@ func (el *ContainerFromImage) Ports(containerProtocol string, containerPort int6
 
 // OnBuild
 //
-// The ONBUILD instruction adds to the image a trigger instruction
-// to be executed at a later time, when the image is used as the base for another build.
+// The OnBuild function adds to the image a trigger instruction
+// to be executed later, when the image is used as the base for another build.
 // The trigger will be executed in the context of the downstream build, as if it had been
 // inserted immediately after the FROM instruction in the downstream Dockerfile.
 //
@@ -202,12 +197,12 @@ func (el *ContainerFromImage) Ports(containerProtocol string, containerPort int6
 // Dockerfile to copy-paste into their application, but that is inefficient, error-prone
 // and difficult to update because it mixes with application-specific code.
 //
-// The solution is to use ONBUILD to register advance instructions to run later, during
+// The solution is to use OnBuild to register advance instructions to run later, during
 // the next build stage.
 //
 // Here’s how it works:
 //
-// When it encounters an ONBUILD instruction, the builder adds a trigger to the metadata
+// When it encounters an OnBuild instruction, the builder adds a trigger to the metadata
 // of the image being built. The instruction does not otherwise affect the current build.
 // At the end of the build, a list of all triggers is stored in the image manifest, under
 // the key OnBuild. They can be inspected with the docker inspect command.
@@ -564,6 +559,9 @@ func (el *ContainerFromImage) failFlagThread() {
 	var err error
 	var logs []byte
 	var lineList [][]byte
+	var found bool
+	var line []byte
+
 	el.manager.TickerFail = time.NewTicker(10 * time.Second)
 	go func() {
 		for {
@@ -578,7 +576,9 @@ func (el *ContainerFromImage) failFlagThread() {
 					}
 
 					lineList = el.logsCleaner(logs, i)
-					el.logsSearchAndReplaceIntoText(i, &logs, lineList, el.failPath, el.failFlag)
+					if line, found = el.logsSearchAndReplaceIntoText(i, &logs, lineList, el.failPath, el.failFlag); found {
+						el.manager.FailCh <- string(line)
+					}
 
 				}
 			}
@@ -650,9 +650,20 @@ func (el *ContainerFromImage) statsThread() {
 	var err error
 	el.manager.TickerStats = time.NewTicker(10 * time.Second)
 	go func() {
+		var inspect types.ContainerJSON
 		var stats types.Stats
 		var line [][]string
 		var writer *csv.Writer
+
+		var stateRunning string
+		var stateDead string
+		var stateOOMKilled string
+		var statePaused string
+		var stateRestarting string
+		var stateError string
+		var stateStatus string
+		var stateExitCode string
+		var stateHealth string
 
 		var file = make([]*os.File, el.copies)
 		for i := 0; i != el.copies; i += 1 {
@@ -673,6 +684,16 @@ func (el *ContainerFromImage) statsThread() {
 
 		line = [][]string{{
 			"time",
+
+			"state - running",
+			"state - dead",
+			"state - OOMKilled",
+			"state - paused",
+			"state - restarting",
+			"state - error",
+			"state - status",
+			"state - exitCode",
+			"state - health check",
 
 			"read",
 			"pre read",
@@ -732,8 +753,37 @@ func (el *ContainerFromImage) statsThread() {
 						continue
 					}
 
+					inspect, err = el.manager.DockerSys[i].ContainerInspect(el.manager.Id[i])
+					if err == nil && inspect.State != nil {
+						stateRunning = strconv.FormatBool(inspect.State.Running)
+						stateDead = strconv.FormatBool(inspect.State.Dead)
+						stateOOMKilled = strconv.FormatBool(inspect.State.OOMKilled)
+						statePaused = strconv.FormatBool(inspect.State.Paused)
+						stateRestarting = strconv.FormatBool(inspect.State.Restarting)
+						stateError = inspect.State.Error
+						stateStatus = inspect.State.Status
+
+						if inspect.State.ExitCode != 0 {
+							stateExitCode = strconv.FormatInt(int64(inspect.State.ExitCode), 10)
+						}
+
+						if inspect.State.Health != nil {
+							stateHealth = inspect.State.Health.Status
+						}
+					}
+
 					line = [][]string{{
 						time.Now().Format("2006-01-02 15:04:05"),
+
+						stateRunning,
+						stateDead,
+						stateOOMKilled,
+						statePaused,
+						stateRestarting,
+						stateError,
+						stateStatus,
+						stateExitCode,
+						stateHealth,
 
 						strconv.FormatInt(int64(stats.Read.Nanosecond()), 10),
 						strconv.FormatInt(int64(stats.PreRead.Nanosecond()), 10),
@@ -938,7 +988,7 @@ func (el *ContainerFromImage) mapContainerPorts(iCopy int) (portConfig nat.PortM
 func (el *ContainerFromImage) imageBuild() (err error) {
 	switch el.command {
 	case "fromServer":
-		if el.serverPath == "" {
+		if el.gitUrl == "" {
 			err = fmt.Errorf("set server path first")
 			return
 		}
@@ -1025,7 +1075,25 @@ func (el *ContainerFromImage) imageBuild() (err error) {
 		var changePointer = make(chan builder.ContainerPullStatusSendToChannel)
 		go el.imageBuildStdOutputToLogOutput(changePointer)
 
-		el.manager.DockerSys[0].ImageBuildFromRemoteServer()
+		el.imageId, err = el.manager.DockerSys[0].ImageBuildFromFolder(
+			el.buildPath,
+			el.imageName,
+			[]string{},
+			el.manager.ImageBuildOptions,
+			changePointer,
+		)
+		if err != nil {
+			err = fmt.Errorf("container.imageBuild().ImageBuildFromFolder().error: %v", err)
+			return
+		}
+
+		if el.imageId == "" {
+			err = fmt.Errorf("container.imageBuild().ImageBuildFromFolder().error: %v", "image ID was not generated")
+			return
+		}
+
+		// Construir uma imagem de múltiplas etapas deixa imagens grandes e sem serventia, ocupando espaço no HD.
+		_ = el.manager.DockerSys[0].ImageGarbageCollector()
 
 	case "fromFolder":
 		if el.buildPath == "" {
@@ -1292,13 +1360,14 @@ func (el *ContainerFromImage) imageExpirationTimeIsValid() (valid bool) {
 	var inspect types.ImageInspect
 	inspect, err = el.manager.DockerSys[0].ImageInspect(el.imageId)
 	if err != nil {
+		el.manager.ErrorCh <- fmt.Errorf("container.imageExpirationTimeIsValid().ImageInspect().error: %v", err)
 		return
 	}
 
 	var imageCreated time.Time
 	imageCreated, err = time.Parse(time.RFC3339Nano, inspect.Created)
 	if err != nil {
-		el.manager.ErrorCh <- fmt.Errorf("container.imageExpirationTimeIsValid().error: %v", err)
+		el.manager.ErrorCh <- fmt.Errorf("container.imageExpirationTimeIsValid().Parse().error: %v", err)
 		return
 	}
 	return imageCreated.Add(el.imageExpirationTime).After(time.Now())
@@ -2330,27 +2399,31 @@ func (el *ContainerFromImage) AutoDockerfileGenerator(autoDockerfile DockerfileA
 //
 //	 Notas:
 //	   * Para mudar o nome do arquivo ssh usado como chave, use a função SetSshKeyFileName().
-func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (err error) {
+func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (ref *ContainerFromImage) {
+	var err error
 	var userData *user.User
 	var fileData []byte
 	var filePathToRead string
 
 	userData, err = user.Current()
 	if err != nil {
-		return
+		el.manager.ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().Current().error: %v", err)
+		return el
 	}
 
 	if el.sshDefaultFileName == "" {
 		el.sshDefaultFileName, err = el.GetSshKeyFileName(userData.HomeDir)
 		if err != nil {
-			return
+			el.manager.ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().GetSshKeyFileName().error: %v", err)
+			return el
 		}
 	}
 
 	filePathToRead = filepath.Join(userData.HomeDir, ".ssh", el.sshDefaultFileName)
 	fileData, err = ioutil.ReadFile(filePathToRead)
 	if err != nil {
-		return
+		el.manager.ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile(0).error: %v", err)
+		return el
 	}
 
 	el.contentIdRsaFile = string(fileData)
@@ -2359,8 +2432,8 @@ func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (err error) {
 	filePathToRead = filepath.Join(userData.HomeDir, ".ssh", "known_hosts")
 	fileData, err = ioutil.ReadFile(filePathToRead)
 	if err != nil {
-		err = fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile().error: %v", err)
-		return
+		el.manager.ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile(1).error: %v", err)
+		return el
 	}
 
 	el.contentKnownHostsFile = string(fileData)
@@ -2369,15 +2442,15 @@ func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (err error) {
 	filePathToRead = filepath.Join(userData.HomeDir, ".gitconfig")
 	fileData, err = ioutil.ReadFile(filePathToRead)
 	if err != nil {
-		err = fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile().error: %v", err)
-		return
+		el.manager.ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile(2).error: %v", err)
+		return el
 	}
 
 	el.contentGitConfigFile = string(fileData)
 	el.contentGitConfigFileWithScape = strings.ReplaceAll(el.contentGitConfigFile, `"`, `\"`)
 
 	el.addImageBuildOptionsGitCredentials()
-	return
+	return el
 }
 
 // GetSshKeyFileName
@@ -2823,4 +2896,24 @@ func (el *ContainerFromImage) gitMakePublicSshKey() (publicKeys *sshGit.PublicKe
 	}
 
 	return
+}
+
+// GitPathPrivateRepository
+//
+// English:
+//
+//	Path do private repository defined in "go env -w GOPRIVATE=$GIT_PRIVATE_REPO"
+//
+//	 Input:
+//	   value: Caminho do repositório privado. Eg.: github.com/helmutkemper
+//
+// Português:
+//
+//	Caminho do repositório privado definido em "go env -w GOPRIVATE=$GIT_PRIVATE_REPO"
+//
+//	 Entrada:
+//	   value: Caminho do repositório privado. Ex.: github.com/helmutkemper
+func (el *ContainerFromImage) GitPathPrivateRepository(value string) (ref *ContainerFromImage) {
+	el.gitPathPrivateRepository = value
+	return el
 }
