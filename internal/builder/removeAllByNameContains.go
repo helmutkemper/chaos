@@ -61,7 +61,7 @@ func (el DockerSystem) RemoveAllByNameContains(name string) (err error) {
 				}
 
 				if container.State != nil && container.State.Running == true {
-					err = el.ContainerStopAndRemove(data.ID, true, false, true)
+					err = el.ContainerStopAndRemove(data.ID)
 					if err != nil {
 						return
 					}

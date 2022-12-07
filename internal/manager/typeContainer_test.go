@@ -16,6 +16,7 @@ func TestContainerFromImage_Primordial(t *testing.T) {
 	manager.New()
 
 	manager.Primordial().
+		TestDuration(5*time.Minute).
 		NetworkCreate("delete_before_test", "10.0.0.0/16", "10.0.0.1")
 
 	private := &Manager{}
@@ -27,8 +28,14 @@ func TestContainerFromImage_Primordial(t *testing.T) {
 		Healthcheck(30*time.Second, 30*time.Second, 30*time.Second, 1, "CMD", "ash", "curl --fail http://localhost:5000/").
 		Ports("tcp", 3000, 0, 3000).
 		MakeDockerfile().
-		Create("private", 1).
+		EnableChaos(3, 3, 3, 1, 1.0, 1.0).
+		Create("private", 3).
 		Start()
+
+	if !manager.Primordial().Monitor() {
+		t.Fail()
+	}
+	t.FailNow()
 
 	barco := &Manager{}
 	barco.New()
@@ -62,7 +69,7 @@ func TestContainerFromImage_Primordial(t *testing.T) {
 		).
 		FailFlag("../../bugs", "\"fatal\"", "panic:").
 		ReplaceBeforeBuild("/Dockerfile", "/Users/kemper/go/projetos/barcocopy/internal/test/chaos/simpleRestart/Dockerfile").
-		Create("delete_barco", 3).
+		Create("barco", 3).
 		Start()
 
 	mongodb := &Manager{}
@@ -72,7 +79,7 @@ func TestContainerFromImage_Primordial(t *testing.T) {
 		Ports("tcp", 27017, 27016, 27015, 27014).
 		Volumes("/data/db", "../../internal/builder/test/data0", "../../internal/builder/test/data1", "../../internal/builder/test/data2").
 		EnvironmentVar([]string{"--host 0.0.0.0"}).
-		Create("delete_mongo", 1).
+		Create("mongo", 1).
 		Start()
 
 	if !manager.Primordial().Monitor() {

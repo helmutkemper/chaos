@@ -3,7 +3,10 @@ package manager
 import (
 	"fmt"
 	"github.com/helmutkemper/chaos/internal/monitor"
+	"time"
 )
+
+var networkManagerGlobal *dockerNetwork
 
 type Primordial struct {
 	manager *Manager
@@ -22,14 +25,21 @@ type Primordial struct {
 //	  * If there is already a network with the same name and the same configuration, nothing will be done;
 //	  * If a network with the same name and different configuration already exists, the network will be deleted and a new network created.
 func (el *Primordial) NetworkCreate(name, subnet, gateway string) (ref *Primordial) {
-	network := new(Network)
-	network.New(el.manager)
-
 	var err error
-	if err = network.NetworkCreate(name, subnet, gateway); err != nil {
+	if err = el.manager.networkCreate(name, subnet, gateway); err != nil {
 		el.manager.ErrorCh <- fmt.Errorf("primordial.NetworkCreate().error: %v", err)
 		return el
 	}
+
+	return el
+}
+
+func (el *Primordial) TestDuration(duration time.Duration) (ref *Primordial) {
+	var timer = time.NewTimer(duration)
+	go func() {
+		<-timer.C
+		el.manager.DoneCh <- struct{}{}
+	}()
 
 	return el
 }

@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
+	"math/rand"
 	"os"
 	"os/user"
 	"path"
@@ -60,7 +61,6 @@ type containerCommon struct {
 	failLogsLastSize    []int
 
 	environment [][]string
-	testTimeout time.Duration
 
 	makeDefaultDockerfile       bool
 	makeDefaultDockerfileExtras bool
@@ -84,6 +84,13 @@ type containerCommon struct {
 	gitUser              string
 	gitPassword          string
 	gitSshPrivateKeyPath string
+
+	ChaosMaxStopped               int
+	ChaosMaxPaused                int
+	ChaosMaxPausedStoppedSameTime int
+	ChaosMaxRemove                int
+	ChaosRemoveProbability        float64
+	ChaosChangeIpProbability      float64
 }
 
 type ContainerFromImage struct {
@@ -467,14 +474,6 @@ func (el *ContainerFromImage) ReplaceBeforeBuild(dst, src string) (ref *Containe
 	return el
 }
 
-// TestDuration
-//
-// Defines the duration of the test
-func (el *ContainerFromImage) TestDuration(timeout time.Duration) (ref *ContainerFromImage) {
-	el.testTimeout = timeout //todo: fazer
-	return el
-}
-
 // FailFlag
 //
 // Define um texto, que quando encontrado na saída padrão do container, define o teste como falho.
@@ -530,26 +529,226 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 	}
 
 	el.failFlagThread()
-
-	if el.csvPath == "" {
-		return
-	}
-
 	el.statsThread()
 
-	//if el.testTimeout != 0 {
-	//  var timeout = time.NewTimer(el.testTimeout)
-	//  go func() {
-	//    select {
-	//    case <-timeout.C:
-	//      el.manager.Done <- struct{}{}
-	//    }
-	//  }()
-	//}
-	//
-	//<-el.manager.Done
+	//todo: to function enable chaos
+	el.chaosMountActionsList()
+	el.chaosThread()
 
 	return el
+}
+
+func (el *ContainerFromImage) chaosThread() {
+	tm := time.NewTicker(time.Second)
+	go func() {
+		for {
+			select {
+			case <-tm.C:
+				el.chaosExecuteAction()
+				//todo: channel stopChaos()
+			}
+		}
+	}()
+}
+
+func (el *ContainerFromImage) getRandSeed() (seed *rand.Rand) {
+	source := rand.NewSource(time.Now().UnixNano())
+	return rand.New(source)
+}
+
+func (el *ContainerFromImage) selectDuration(max, min time.Duration) (selected time.Duration) {
+	if int64(max)-int64(min) == 0 {
+		return min
+	}
+
+	randValue := el.getRandSeed().Int63n(int64(max)-int64(min)) + int64(min)
+	return time.Duration(randValue)
+}
+
+func (el *ContainerFromImage) queueContainerStop(iCopy int) {
+	var chaos chaosAction
+	nextTime := time.Now().Add(el.selectDuration(el.manager.ChaosConfig.maximumTimeDelay, el.manager.ChaosConfig.minimumTimeDelay))
+	chaos = chaosAction{
+		time:   nextTime,
+		action: el.manager.DockerSys[iCopy].ContainerStop,
+		id:     el.manager.Id[iCopy],
+	}
+	el.manager.Chaos[iCopy].Action = append(el.manager.Chaos[iCopy].Action, chaos)
+
+	nextTime = time.Now().Add(el.selectDuration(el.manager.ChaosConfig.maximumTimeBeforeRestart, el.manager.ChaosConfig.minimumTimeBeforeRestart))
+	chaos = chaosAction{
+		time:   nextTime,
+		action: el.manager.DockerSys[iCopy].ContainerStart,
+		id:     el.manager.Id[iCopy],
+	}
+	el.manager.Chaos[iCopy].Action = append(el.manager.Chaos[iCopy].Action, chaos)
+	el.manager.Chaos[iCopy].Type = "stop" //todo: const
+}
+
+func (el *ContainerFromImage) queueContainerPause(iCopy int) {
+	var chaos chaosAction
+	nextTime := time.Now().Add(el.selectDuration(el.manager.ChaosConfig.maximumTimeDelay, el.manager.ChaosConfig.minimumTimeDelay))
+	chaos = chaosAction{
+		time:   nextTime,
+		action: el.manager.DockerSys[iCopy].ContainerPause,
+		id:     el.manager.Id[iCopy],
+	}
+	el.manager.Chaos[iCopy].Action = append(el.manager.Chaos[iCopy].Action, chaos)
+
+	nextTime = time.Now().Add(el.selectDuration(el.manager.ChaosConfig.maximumTimeToUnpause, el.manager.ChaosConfig.minimumTimeToUnpause))
+	chaos = chaosAction{
+		time:   nextTime,
+		action: el.manager.DockerSys[iCopy].ContainerUnpause,
+		id:     el.manager.Id[iCopy],
+	}
+	el.manager.Chaos[iCopy].Action = append(el.manager.Chaos[iCopy].Action, chaos)
+	el.manager.Chaos[iCopy].Type = "pause" //todo: const
+}
+
+func (el *ContainerFromImage) queueContainerDoNotting(iCopy int) {
+	var chaos chaosAction
+	nextTime := time.Now().Add(el.selectDuration(el.manager.ChaosConfig.maximumTimeDelay, el.manager.ChaosConfig.minimumTimeDelay))
+	chaos = chaosAction{
+		time:   nextTime,
+		action: el.chaosDoNotting,
+		id:     el.manager.Id[iCopy],
+	}
+	el.manager.Chaos[iCopy].Action = append(el.manager.Chaos[iCopy].Action, chaos)
+
+	nextTime = time.Now().Add(el.selectDuration(el.manager.ChaosConfig.maximumTimeToUnpause, el.manager.ChaosConfig.minimumTimeToUnpause))
+	chaos = chaosAction{
+		time:   nextTime,
+		action: el.chaosDoNotting,
+		id:     el.manager.Id[iCopy],
+	}
+	el.manager.Chaos[iCopy].Action = append(el.manager.Chaos[iCopy].Action, chaos)
+	el.manager.Chaos[iCopy].Type = "doNotting" //todo: const
+}
+
+func (el *ContainerFromImage) chaosMountActionsList() {
+	//todo: seed rand
+
+	//  minimumTimeDelay         time.Duration
+	//  maximumTimeDelay         time.Duration
+	//  minimumTimeToUnpause     time.Duration
+	//  maximumTimeToUnpause     time.Duration
+	//  minimumTimeBeforeRestart time.Duration
+	//  maximumTimeBeforeRestart time.Duration
+	//
+	//  minimumTimeToStartChaos time.Duration
+	//  maximumTimeToStartChaos time.Duration
+	//  minimumTimeToPause      time.Duration
+	//  maximumTimeToPause      time.Duration
+	//
+	//  minimumTimeToRestart       time.Duration
+	//  maximumTimeToRestart       time.Duration
+	//  restartProbability         float64
+	//  restartChangeIpProbability float64
+	//  restartLimit               int
+	//
+	//  chaosMaxStopped               int
+	//  chaosMaxPaused                int
+	//  chaosMaxPausedStoppedSameTime int
+	//  chaosMaxRemove                int
+	//  chaosRemoveProbability        float64
+	//  chaosChangeIpProbability      float64
+
+	var stopped = 0
+	var paused = 0
+	var doNotting = 0
+
+	for iCopy := 0; iCopy != el.copies; iCopy += 1 {
+		switch el.manager.Chaos[iCopy].Type {
+		case "stop":
+			stopped += 1
+		case "pause":
+			paused += 1
+		case "doNotting":
+			doNotting += 1
+		}
+	}
+
+	for iCopy := 0; iCopy != el.copies; iCopy += 1 {
+
+		if el.manager.Chaos[iCopy].Type != "" {
+			continue
+		}
+
+		if el.ChaosMaxPausedStoppedSameTime != 0 && el.ChaosMaxPausedStoppedSameTime <= stopped+paused {
+			return
+		}
+
+		for {
+			pass := false
+			action := rand.Intn(5) //todo: melhorar
+			switch action {
+
+			case 0: //stop
+				if el.ChaosMaxStopped != 0 && el.ChaosMaxStopped <= stopped {
+					continue
+				}
+
+				stopped += 1
+				el.queueContainerStop(iCopy)
+				pass = true
+
+			case 1: //pause
+				if el.ChaosMaxPaused != 0 && el.ChaosMaxPaused <= paused {
+					continue
+				}
+
+				paused += 1
+				el.queueContainerPause(iCopy)
+				pass = true
+
+			default: //do notting
+				continue // todo: apagar esta linha
+				el.queueContainerDoNotting(iCopy)
+				doNotting += 1
+				pass = true
+			}
+
+			if pass == true {
+				break
+			}
+		}
+	}
+}
+
+func (el *ContainerFromImage) chaosExecuteAction() {
+	var err error
+	var chaos chaosAction
+	var empty bool
+	for iCopy := 0; iCopy != el.copies; iCopy += 1 {
+		if el.manager.Chaos[iCopy].Type != "" {
+			chaos = el.manager.Chaos[iCopy].Action[0]
+
+			if time.Now().After(chaos.time) {
+				if chaos.action != nil {
+					if err = chaos.action(chaos.id); err != nil {
+						el.manager.ErrorCh <- fmt.Errorf("container[%v].chaosExecuteAction().chaos.action(%v).error: %v", iCopy, chaos.id, err)
+						return
+					}
+				} else {
+					log.Printf("bug: chaos.action() is nil")
+				}
+
+				el.manager.Chaos[iCopy].Action = el.manager.Chaos[iCopy].Action[1:]
+				if len(el.manager.Chaos[iCopy].Action) == 0 {
+					el.manager.Chaos[iCopy].Type = ""
+					empty = true
+				}
+			}
+		}
+	}
+
+	if empty {
+		el.chaosMountActionsList()
+	}
+}
+
+func (el *ContainerFromImage) chaosDoNotting(_ string) (err error) {
+	return
 }
 
 // failFlagThread
@@ -647,6 +846,10 @@ func (el *ContainerFromImage) logsSearchAndReplaceIntoText(key int, logs *[]byte
 //
 // Inspects the container and saves container statistics information to a CSV file every 10 seconds
 func (el *ContainerFromImage) statsThread() {
+	if el.csvPath == "" {
+		return
+	}
+
 	var err error
 	el.manager.TickerStats = time.NewTicker(10 * time.Second)
 	go func() {
@@ -863,6 +1066,8 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 	}
 
 	el.failLogsLastSize = make([]int, copies)
+	el.manager.Chaos = make([]Chaos, copies)
+
 	// adjust image name to have version tag
 	el.imageName = el.manager.DockerSys[0].AdjustImageName(el.imageName)
 	el.containerName = containerName
@@ -890,8 +1095,8 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 		}
 
 		// get the next ip address from network
-		if el.manager.network != nil {
-			ipAddress, netConfig, err = el.manager.network.generator.GetNext()
+		if networkManagerGlobal != nil {
+			ipAddress, netConfig, err = networkManagerGlobal.generator.GetNext()
 			if err != nil {
 				el.manager.ErrorCh <- fmt.Errorf("container.Create().network.GetNext().error: %v", err)
 				return el
@@ -2373,6 +2578,17 @@ func (el *ContainerFromImage) DockerfilePath(path string) (ref *ContainerFromIma
 // Defines the dockerfile generator object
 func (el *ContainerFromImage) AutoDockerfileGenerator(autoDockerfile DockerfileAuto) (ref *ContainerFromImage) {
 	el.autoDockerfile = autoDockerfile
+	return el
+}
+
+func (el *ContainerFromImage) EnableChaos(maxStopped, maxPaused, maxPausedStoppedSameTime, maxRemove int, removeProbability, changeIpProbability float64) (ref *ContainerFromImage) {
+	el.ChaosMaxStopped = maxStopped
+	el.ChaosMaxPaused = maxPaused
+	el.ChaosMaxPausedStoppedSameTime = maxPausedStoppedSameTime
+	el.ChaosMaxRemove = maxRemove
+	el.ChaosRemoveProbability = removeProbability
+	el.ChaosChangeIpProbability = changeIpProbability
+
 	return el
 }
 
