@@ -8,20 +8,60 @@ import (
 var ErrorChList = make([]<-chan error, 0)
 var FailChList = make([]<-chan string, 0)
 var DoneChList = make([]<-chan struct{}, 0)
+var EndFunc = make([]func(), 0)
+var ChaosFunc = make([]func(), 0)
+
+var counterEndFunc = 0
+
+func AddChaosFunc(f ...func()) {
+	counterEndFunc += 1
+	ChaosFunc = append(ChaosFunc, f...)
+}
+
+func AddEndFunc(f func()) {
+	EndFunc = append(EndFunc, f)
+}
+
+func EndAll() {
+	for k := range EndFunc {
+		EndFunc[k]()
+	}
+}
 
 func Monitor() (pass bool) {
+	for k := range ChaosFunc {
+		if ChaosFunc[k] != nil {
+			ChaosFunc[k]()
+		} else {
+			log.Printf("bug: chaos func is nil")
+		}
+	}
+
 	eventError := mergeErrorChannels(ErrorChList...)
 	eventFail := mergeFailChannels(FailChList...)
 	eventDone := mergeChannels(DoneChList...)
 
-	select {
-	case err := <-eventError:
-		log.Printf("test error: %v", err)
-	case fail := <-eventFail:
-		log.Printf("test fail: %v", fail)
-	case <-eventDone:
-		log.Printf("done!")
-		pass = true
+	var end bool
+	for {
+		select {
+		case err := <-eventError:
+			end = true
+			log.Printf("test error: %v", err)
+		case fail := <-eventFail:
+			end = true
+			log.Printf("test fail: %v", fail)
+		case <-eventDone:
+			counterEndFunc -= 1
+			if counterEndFunc <= 0 {
+				end = true
+				pass = true
+				EndAll()
+			}
+		}
+
+		if end {
+			break
+		}
 	}
 
 	return

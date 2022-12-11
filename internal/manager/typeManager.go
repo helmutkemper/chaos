@@ -16,9 +16,10 @@ type dockerNetwork struct {
 }
 
 type chaosAction struct {
-	time   time.Time
-	action func(string) error
-	id     string
+	time    time.Time
+	action  func(string) error
+	display string
+	id      string
 }
 
 type chaosConfig struct {

@@ -15,6 +15,7 @@ import (
 	sshGit "github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/helmutkemper/chaos/internal/builder"
 	"github.com/helmutkemper/chaos/internal/dockerfileGolang"
+	"github.com/helmutkemper/chaos/internal/monitor"
 	"github.com/helmutkemper/chaos/internal/util/utilCopy"
 	"io/fs"
 	"io/ioutil"
@@ -89,8 +90,9 @@ type containerCommon struct {
 	ChaosMaxPaused                int
 	ChaosMaxPausedStoppedSameTime int
 	ChaosMaxRemove                int
-	ChaosRemoveProbability        float64
 	ChaosChangeIpProbability      float64
+
+	ChaosTestEnd bool
 }
 
 type ContainerFromImage struct {
@@ -531,21 +533,27 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 	el.failFlagThread()
 	el.statsThread()
 
-	//todo: to function enable chaos
-	el.chaosMountActionsList()
-	el.chaosThread()
+	monitor.AddEndFunc(el.End)
 
 	return el
 }
 
+func (el *ContainerFromImage) End() {
+	el.ChaosTestEnd = true
+}
+
 func (el *ContainerFromImage) chaosThread() {
+	var end bool
 	tm := time.NewTicker(time.Second)
 	go func() {
 		for {
 			select {
 			case <-tm.C:
-				el.chaosExecuteAction()
-				//todo: channel stopChaos()
+				end = el.chaosExecuteAction()
+				if end {
+					el.manager.DoneCh <- struct{}{}
+					return
+				}
 			}
 		}
 	}()
@@ -569,17 +577,19 @@ func (el *ContainerFromImage) queueContainerStop(iCopy int) {
 	var chaos chaosAction
 	nextTime := time.Now().Add(el.selectDuration(el.manager.ChaosConfig.maximumTimeDelay, el.manager.ChaosConfig.minimumTimeDelay))
 	chaos = chaosAction{
-		time:   nextTime,
-		action: el.manager.DockerSys[iCopy].ContainerStop,
-		id:     el.manager.Id[iCopy],
+		display: "stop()",
+		time:    nextTime,
+		action:  el.manager.DockerSys[iCopy].ContainerStop,
+		id:      el.manager.Id[iCopy],
 	}
 	el.manager.Chaos[iCopy].Action = append(el.manager.Chaos[iCopy].Action, chaos)
 
-	nextTime = time.Now().Add(el.selectDuration(el.manager.ChaosConfig.maximumTimeBeforeRestart, el.manager.ChaosConfig.minimumTimeBeforeRestart))
+	nextTime = nextTime.Add(el.selectDuration(el.manager.ChaosConfig.maximumTimeBeforeRestart, el.manager.ChaosConfig.minimumTimeBeforeRestart))
 	chaos = chaosAction{
-		time:   nextTime,
-		action: el.manager.DockerSys[iCopy].ContainerStart,
-		id:     el.manager.Id[iCopy],
+		display: "start()",
+		time:    nextTime,
+		action:  el.manager.DockerSys[iCopy].ContainerStart,
+		id:      el.manager.Id[iCopy],
 	}
 	el.manager.Chaos[iCopy].Action = append(el.manager.Chaos[iCopy].Action, chaos)
 	el.manager.Chaos[iCopy].Type = "stop" //todo: const
@@ -589,17 +599,19 @@ func (el *ContainerFromImage) queueContainerPause(iCopy int) {
 	var chaos chaosAction
 	nextTime := time.Now().Add(el.selectDuration(el.manager.ChaosConfig.maximumTimeDelay, el.manager.ChaosConfig.minimumTimeDelay))
 	chaos = chaosAction{
-		time:   nextTime,
-		action: el.manager.DockerSys[iCopy].ContainerPause,
-		id:     el.manager.Id[iCopy],
+		display: "pause()",
+		time:    nextTime,
+		action:  el.manager.DockerSys[iCopy].ContainerPause,
+		id:      el.manager.Id[iCopy],
 	}
 	el.manager.Chaos[iCopy].Action = append(el.manager.Chaos[iCopy].Action, chaos)
 
-	nextTime = time.Now().Add(el.selectDuration(el.manager.ChaosConfig.maximumTimeToUnpause, el.manager.ChaosConfig.minimumTimeToUnpause))
+	nextTime = nextTime.Add(el.selectDuration(el.manager.ChaosConfig.maximumTimeToUnpause, el.manager.ChaosConfig.minimumTimeToUnpause))
 	chaos = chaosAction{
-		time:   nextTime,
-		action: el.manager.DockerSys[iCopy].ContainerUnpause,
-		id:     el.manager.Id[iCopy],
+		display: "unpause()",
+		time:    nextTime,
+		action:  el.manager.DockerSys[iCopy].ContainerUnpause,
+		id:      el.manager.Id[iCopy],
 	}
 	el.manager.Chaos[iCopy].Action = append(el.manager.Chaos[iCopy].Action, chaos)
 	el.manager.Chaos[iCopy].Type = "pause" //todo: const
@@ -609,17 +621,19 @@ func (el *ContainerFromImage) queueContainerDoNotting(iCopy int) {
 	var chaos chaosAction
 	nextTime := time.Now().Add(el.selectDuration(el.manager.ChaosConfig.maximumTimeDelay, el.manager.ChaosConfig.minimumTimeDelay))
 	chaos = chaosAction{
-		time:   nextTime,
-		action: el.chaosDoNotting,
-		id:     el.manager.Id[iCopy],
+		display: "doNotting()",
+		time:    nextTime,
+		action:  el.chaosDoNotting,
+		id:      el.manager.Id[iCopy],
 	}
 	el.manager.Chaos[iCopy].Action = append(el.manager.Chaos[iCopy].Action, chaos)
 
-	nextTime = time.Now().Add(el.selectDuration(el.manager.ChaosConfig.maximumTimeToUnpause, el.manager.ChaosConfig.minimumTimeToUnpause))
+	nextTime = nextTime.Add(el.selectDuration(el.manager.ChaosConfig.maximumTimeToUnpause, el.manager.ChaosConfig.minimumTimeToUnpause))
 	chaos = chaosAction{
-		time:   nextTime,
-		action: el.chaosDoNotting,
-		id:     el.manager.Id[iCopy],
+		display: "doNotting()",
+		time:    nextTime,
+		action:  el.chaosDoNotting,
+		id:      el.manager.Id[iCopy],
 	}
 	el.manager.Chaos[iCopy].Action = append(el.manager.Chaos[iCopy].Action, chaos)
 	el.manager.Chaos[iCopy].Type = "doNotting" //todo: const
@@ -715,16 +729,16 @@ func (el *ContainerFromImage) chaosMountActionsList() {
 	}
 }
 
-func (el *ContainerFromImage) chaosExecuteAction() {
+func (el *ContainerFromImage) chaosExecuteAction() (end bool) {
 	var err error
 	var chaos chaosAction
-	var empty bool
 	for iCopy := 0; iCopy != el.copies; iCopy += 1 {
 		if el.manager.Chaos[iCopy].Type != "" {
 			chaos = el.manager.Chaos[iCopy].Action[0]
 
 			if time.Now().After(chaos.time) {
 				if chaos.action != nil {
+					log.Printf("%v: %v", chaos.display, el.manager.DockerSys[iCopy].ContainerName)
 					if err = chaos.action(chaos.id); err != nil {
 						el.manager.ErrorCh <- fmt.Errorf("container[%v].chaosExecuteAction().chaos.action(%v).error: %v", iCopy, chaos.id, err)
 						return
@@ -736,15 +750,24 @@ func (el *ContainerFromImage) chaosExecuteAction() {
 				el.manager.Chaos[iCopy].Action = el.manager.Chaos[iCopy].Action[1:]
 				if len(el.manager.Chaos[iCopy].Action) == 0 {
 					el.manager.Chaos[iCopy].Type = ""
-					empty = true
 				}
 			}
 		}
 	}
 
-	if empty {
+	end = true
+	for iCopy := 0; iCopy != el.copies; iCopy += 1 {
+		if len(el.manager.Chaos[iCopy].Action) != 0 {
+			end = false
+			break
+		}
+	}
+
+	if end {
 		el.chaosMountActionsList()
 	}
+
+	return
 }
 
 func (el *ContainerFromImage) chaosDoNotting(_ string) (err error) {
@@ -2581,13 +2604,14 @@ func (el *ContainerFromImage) AutoDockerfileGenerator(autoDockerfile DockerfileA
 	return el
 }
 
-func (el *ContainerFromImage) EnableChaos(maxStopped, maxPaused, maxPausedStoppedSameTime, maxRemove int, removeProbability, changeIpProbability float64) (ref *ContainerFromImage) {
+func (el *ContainerFromImage) EnableChaos(maxStopped, maxPaused, maxPausedStoppedSameTime, maxRemove int, changeIpProbability float64) (ref *ContainerFromImage) {
 	el.ChaosMaxStopped = maxStopped
 	el.ChaosMaxPaused = maxPaused
 	el.ChaosMaxPausedStoppedSameTime = maxPausedStoppedSameTime
 	el.ChaosMaxRemove = maxRemove
-	el.ChaosRemoveProbability = removeProbability
 	el.ChaosChangeIpProbability = changeIpProbability
+
+	monitor.AddChaosFunc(el.chaosMountActionsList, el.chaosThread)
 
 	return el
 }

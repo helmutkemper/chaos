@@ -2,6 +2,7 @@ package manager
 
 import (
 	"github.com/helmutkemper/chaos/internal/standalone"
+	"log"
 	"testing"
 	"time"
 )
@@ -16,7 +17,6 @@ func TestContainerFromImage_Primordial(t *testing.T) {
 	manager.New()
 
 	manager.Primordial().
-		TestDuration(5*time.Minute).
 		NetworkCreate("delete_before_test", "10.0.0.0/16", "10.0.0.1")
 
 	private := &Manager{}
@@ -28,14 +28,9 @@ func TestContainerFromImage_Primordial(t *testing.T) {
 		Healthcheck(30*time.Second, 30*time.Second, 30*time.Second, 1, "CMD", "ash", "curl --fail http://localhost:5000/").
 		Ports("tcp", 3000, 0, 3000).
 		MakeDockerfile().
-		EnableChaos(3, 3, 3, 1, 1.0, 1.0).
+		EnableChaos(1, 1, 2, 1, 1.0).
 		Create("private", 3).
 		Start()
-
-	if !manager.Primordial().Monitor() {
-		t.Fail()
-	}
-	t.FailNow()
 
 	barco := &Manager{}
 	barco.New()
@@ -76,15 +71,18 @@ func TestContainerFromImage_Primordial(t *testing.T) {
 	mongodb.New()
 	mongodb.ContainerFromImage("mongo:latest").
 		SaveStatistics("../../").
+		EnableChaos(1, 1, 2, 1, 1.0).
 		Ports("tcp", 27017, 27016, 27015, 27014).
 		Volumes("/data/db", "../../internal/builder/test/data0", "../../internal/builder/test/data1", "../../internal/builder/test/data2").
 		EnvironmentVar([]string{"--host 0.0.0.0"}).
 		Create("mongo", 1).
 		Start()
 
-	if !manager.Primordial().Monitor() {
+	if !manager.Primordial().Monitor(5 * time.Minute) {
 		t.Fail()
 	}
+
+	log.Printf("done!")
 }
 
 //

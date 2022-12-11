@@ -34,17 +34,13 @@ func (el *Primordial) NetworkCreate(name, subnet, gateway string) (ref *Primordi
 	return el
 }
 
-func (el *Primordial) TestDuration(duration time.Duration) (ref *Primordial) {
+func (el *Primordial) Monitor(duration time.Duration) (pass bool) {
 	var timer = time.NewTimer(duration)
 	go func() {
 		<-timer.C
-		el.manager.DoneCh <- struct{}{}
+		monitor.EndAll()
 	}()
 
-	return el
-}
-
-func (el *Primordial) Monitor() (pass bool) {
 	return monitor.Monitor()
 }
 

@@ -16,6 +16,7 @@ type DockerSystem struct {
 	ctx              context.Context
 	networkId        map[string]string
 	imageId          map[string]string
+	ContainerName    string
 	container        map[string]container.ContainerCreateCreatedBody
 	networkGenerator map[string]*NextNetworkAutoConfiguration
 	healthcheck      *container.HealthConfig

@@ -97,6 +97,8 @@ func (el *DockerSystem) ContainerCreateWithConfig(
 		el.container = make(map[string]container.ContainerCreateCreatedBody)
 	}
 
+	el.ContainerName = containerName
+
 	resp, err = el.cli.ContainerCreate(
 		el.ctx,
 		configuration,
