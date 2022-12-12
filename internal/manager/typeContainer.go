@@ -90,7 +90,6 @@ type containerCommon struct {
 	ChaosMaxStopped               int
 	ChaosMaxPaused                int
 	ChaosMaxPausedStoppedSameTime int
-	ChaosMaxRemove                int
 	ChaosChangeIpProbability      float64
 
 	ChaosTestEnd bool
@@ -2826,7 +2825,7 @@ func (el *ContainerFromImage) AutoDockerfileGenerator(autoDockerfile DockerfileA
 	return el
 }
 
-func (el *ContainerFromImage) EnableChaos(maxStopped, maxPaused, maxPausedStoppedSameTime, maxRemove int, changeIpProbability float64) (ref *ContainerFromImage) {
+func (el *ContainerFromImage) EnableChaos(maxStopped, maxPaused, maxPausedStoppedSameTime int, changeIpProbability float64) (ref *ContainerFromImage) {
 	if monitor.Err {
 		return el
 	}
@@ -2834,7 +2833,6 @@ func (el *ContainerFromImage) EnableChaos(maxStopped, maxPaused, maxPausedStoppe
 	el.ChaosMaxStopped = maxStopped
 	el.ChaosMaxPaused = maxPaused
 	el.ChaosMaxPausedStoppedSameTime = maxPausedStoppedSameTime
-	el.ChaosMaxRemove = maxRemove
 	el.ChaosChangeIpProbability = changeIpProbability
 	el.ChaosEnabled = true
 
