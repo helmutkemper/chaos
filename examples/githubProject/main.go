@@ -19,7 +19,7 @@ func main() {
 		Create("public", 1).
 		Start()
 
-	if !primordial.Monitor(1 * time.Minute) {
+	if !primordial.Monitor(5 * time.Minute) {
 		log.Print("fail!")
 	}
 
