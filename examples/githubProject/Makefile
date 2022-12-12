@@ -6,4 +6,4 @@ GOTESTSUM ?= gotestsum
 ## run the example
 build:
 	@$(GO) mod tidy
-	@$(GO) run ./main.go
+	@$(GO) test git_test.go -v
