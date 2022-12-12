@@ -4,7 +4,7 @@
 
 This example turns a git repository into a container
 
-![basic usage](./images/img.png)
+![basic usage](./images/basic.png)
 
 ```shell
   make build
