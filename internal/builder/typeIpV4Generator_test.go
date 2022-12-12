@@ -2,7 +2,6 @@ package builder
 
 import (
 	"errors"
-	"github.com/helmutkemper/util"
 	"log"
 	"math"
 	"testing"
@@ -50,22 +49,18 @@ func TestIPv4Generator_int64ToIP(t *testing.T) {
 	for ipAsInt := startIPAsDecimal; ipAsInt != endIPAsDecimal; ipAsInt += 1 {
 		a, b, c, d = ipGenerator.int64ToIP(ipAsInt)
 		if int(a) != aSignificativePlace {
-			util.TraceToLog()
 			t.FailNow()
 		}
 
 		if int(b) != bSignificativePlace {
-			util.TraceToLog()
 			t.FailNow()
 		}
 
 		if int(c) != cSignificativePlace {
-			util.TraceToLog()
 			t.FailNow()
 		}
 
 		if int(d) != dSignificativePlace {
-			util.TraceToLog()
 			t.FailNow()
 		}
 
@@ -114,7 +109,6 @@ func TestIPv4Generator_Init(t *testing.T) {
 		10, 0, 0, 0, 4,
 	)
 	if err != nil {
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -127,7 +121,6 @@ func TestIPv4Generator_Init(t *testing.T) {
 
 	if caseA && caseB && caseC && caseD == false {
 		err = errors.New("gateway initialization error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -141,7 +134,6 @@ func TestIPv4Generator_Init(t *testing.T) {
 
 	if caseA && caseB && caseC && caseD && caseE == false {
 		err = errors.New("subnet initialization error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -153,7 +145,6 @@ func TestIPv4Generator_Init(t *testing.T) {
 	caseD = g.ipD == 2
 	if caseA && caseB && caseC && caseD == false {
 		err = errors.New("current ip initialization error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -166,7 +157,6 @@ func TestIPv4Generator_Init(t *testing.T) {
 
 	if g.ipMinAddr != tmpA+tmpB+tmpC+tmpD {
 		err = errors.New("min ip error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -181,7 +171,6 @@ func TestIPv4Generator_Init(t *testing.T) {
 
 	if g.ipMaxAddr != tmpA+tmpB+tmpC+tmpD+tmpE {
 		err = errors.New("max ip error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -204,7 +193,6 @@ func TestIPv4Generator_Init(t *testing.T) {
 
 	if caseA && caseB && caseC && caseD {
 		err = errors.New("max ip error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -223,7 +211,6 @@ func TestIPv4Generator_Init_2(t *testing.T) {
 		10, 0, 10, 5, 4,
 	)
 	if err != nil {
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -236,7 +223,6 @@ func TestIPv4Generator_Init_2(t *testing.T) {
 
 	if caseA && caseB && caseC && caseD == false {
 		err = errors.New("gateway initialization error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -250,7 +236,6 @@ func TestIPv4Generator_Init_2(t *testing.T) {
 
 	if caseA && caseB && caseC && caseD && caseE == false {
 		err = errors.New("subnet initialization error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -262,7 +247,6 @@ func TestIPv4Generator_Init_2(t *testing.T) {
 	caseD = g.ipD == 7
 	if caseA && caseB && caseC && caseD == false {
 		err = errors.New("current ip initialization error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -275,7 +259,6 @@ func TestIPv4Generator_Init_2(t *testing.T) {
 
 	if g.ipMinAddr != tmpA+tmpB+tmpC+tmpD {
 		err = errors.New("min ip error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -290,7 +273,6 @@ func TestIPv4Generator_Init_2(t *testing.T) {
 
 	if g.ipMaxAddr != tmpA+tmpB+tmpC+tmpD+tmpE {
 		err = errors.New("max ip error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -313,7 +295,6 @@ func TestIPv4Generator_Init_2(t *testing.T) {
 
 	if caseA && caseB && caseC && caseD {
 		err = errors.New("max ip error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -329,7 +310,6 @@ func TestIPv4Generator_InitWithString(t *testing.T) {
 		"10.0.0.0/4",
 	)
 	if err != nil {
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -342,7 +322,6 @@ func TestIPv4Generator_InitWithString(t *testing.T) {
 
 	if caseA && caseB && caseC && caseD == false {
 		err = errors.New("gateway initialization error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -356,7 +335,6 @@ func TestIPv4Generator_InitWithString(t *testing.T) {
 
 	if caseA && caseB && caseC && caseD && caseE == false {
 		err = errors.New("subnet initialization error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -368,7 +346,6 @@ func TestIPv4Generator_InitWithString(t *testing.T) {
 	caseD = g.ipD == 2
 	if caseA && caseB && caseC && caseD == false {
 		err = errors.New("current ip initialization error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -381,7 +358,6 @@ func TestIPv4Generator_InitWithString(t *testing.T) {
 
 	if g.ipMinAddr != tmpA+tmpB+tmpC+tmpD {
 		err = errors.New("min ip error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -396,7 +372,6 @@ func TestIPv4Generator_InitWithString(t *testing.T) {
 
 	if g.ipMaxAddr != tmpA+tmpB+tmpC+tmpD+tmpE {
 		err = errors.New("max ip error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -419,7 +394,6 @@ func TestIPv4Generator_InitWithString(t *testing.T) {
 
 	if caseA && caseB && caseC && caseD {
 		err = errors.New("max ip error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -436,7 +410,6 @@ func TestIPv4Generator_IncCurrentIP(t *testing.T) {
 		"10.0.0.0/4",
 	)
 	if err != nil {
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -445,7 +418,6 @@ func TestIPv4Generator_IncCurrentIP(t *testing.T) {
 	for i := 0; i != 13; i += 1 {
 		err = g.IncCurrentIP()
 		if err != nil {
-			util.TraceToLog()
 			log.Printf("error: %v", err.Error())
 			t.Fail()
 			return
@@ -457,7 +429,6 @@ func TestIPv4Generator_IncCurrentIP(t *testing.T) {
 
 		if caseA && caseB && caseC && caseD == false {
 			err = errors.New("current ip increment error")
-			util.TraceToLog()
 			log.Printf("error: %v", err.Error())
 			t.Fail()
 			return
@@ -467,7 +438,6 @@ func TestIPv4Generator_IncCurrentIP(t *testing.T) {
 	err = g.IncCurrentIP()
 	if err == nil || err.Error() != "max allowed ip is 10.0.0.15" {
 		err = errors.New("current ip increment error")
-		util.TraceToLog()
 		log.Printf("error: %v", err.Error())
 		t.Fail()
 		return
@@ -537,7 +507,6 @@ func TestIPv4Generator_incIP(t *testing.T) {
 
 					if caseA && caseB && caseC && caseD && caseE == false {
 						err = errors.New("ip increment error")
-						util.TraceToLog()
 						log.Printf("error: %v", err.Error())
 						t.Fail()
 						return
