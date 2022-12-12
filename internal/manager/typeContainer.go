@@ -86,6 +86,7 @@ type containerCommon struct {
 	gitPassword          string
 	gitSshPrivateKeyPath string
 
+	ChaosEnabled                  bool
 	ChaosMaxStopped               int
 	ChaosMaxPaused                int
 	ChaosMaxPausedStoppedSameTime int
@@ -654,6 +655,11 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 
 func (el *ContainerFromImage) End() {
 	el.ChaosTestEnd = true
+
+	if el.ChaosEnabled == false {
+		el.manager.DoneCh <- struct{}{}
+	}
+
 }
 
 func (el *ContainerFromImage) chaosThread() {
@@ -2830,6 +2836,7 @@ func (el *ContainerFromImage) EnableChaos(maxStopped, maxPaused, maxPausedStoppe
 	el.ChaosMaxPausedStoppedSameTime = maxPausedStoppedSameTime
 	el.ChaosMaxRemove = maxRemove
 	el.ChaosChangeIpProbability = changeIpProbability
+	el.ChaosEnabled = true
 
 	monitor.AddChaosFunc(el.chaosMountActionsList, el.chaosThread)
 
