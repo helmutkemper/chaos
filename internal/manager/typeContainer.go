@@ -943,6 +943,9 @@ func (el *ContainerFromImage) failFlagThread() {
 func (el *ContainerFromImage) logsCleaner(logs []byte, key int) (logsLine [][]byte) {
 
 	size := len(logs) - 1
+	if size < 0 {
+		size = 0
+	}
 
 	// faz o log só lê a parte mais recente do mesmo
 	logs = logs[el.failLogsLastSize[key]:]
