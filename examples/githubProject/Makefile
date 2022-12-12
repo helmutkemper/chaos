@@ -1,3 +1,4 @@
+
 GO ?= go
 GOTESTSUM ?= gotestsum
 
@@ -5,4 +6,4 @@ GOTESTSUM ?= gotestsum
 ## run the example
 build:
 	@$(GO) mod tidy
-	@$(GO) run examples/MongoDB
+	@$(GO) run ./main.go

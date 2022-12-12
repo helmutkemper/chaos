@@ -16,3 +16,7 @@
 
 *.csv
 *.log
+
+examples/MongoDB/mongoData/data0
+examples/MongoDB/mongoData/data1
+examples/MongoDB/mongoData/data2

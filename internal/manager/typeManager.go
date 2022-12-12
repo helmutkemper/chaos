@@ -70,7 +70,7 @@ func (el *Manager) New() {
 	el.DockerSys[0] = new(builder.DockerSystem)
 
 	el.DoneCh = make(chan struct{})
-	el.ErrorCh = make(chan error)
+	el.ErrorCh = make(chan error, 10)
 	el.FailCh = make(chan string)
 
 	el.ChaosConfig.maximumTimeDelay = 90 * time.Second

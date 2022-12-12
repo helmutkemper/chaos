@@ -17,7 +17,7 @@ func (el *DockerSystem) ContainerExecCommand(
 	commands []string,
 ) (
 	exitCode int,
-	runing bool,
+	running bool,
 	stdOutput []byte,
 	stdError []byte,
 	err error,
@@ -59,7 +59,7 @@ func (el *DockerSystem) ContainerExecCommand(
 	stdError, err = ioutil.ReadAll(stderr)
 
 	exitCode = i.ExitCode
-	runing = i.Running
+	running = i.Running
 
 	return
 }

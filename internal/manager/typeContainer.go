@@ -103,6 +103,10 @@ type ContainerFromImage struct {
 //
 // Mounts a standard Dockerfile automatically
 func (el *ContainerFromImage) MakeDockerfile() (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.makeDefaultDockerfile = true
 	el.makeDefaultDockerfileExtras = true
 
@@ -124,6 +128,10 @@ func (el *ContainerFromImage) MakeDockerfile() (ref *ContainerFromImage) {
 //		    - Imagine creating 3 containers and passing the values `pathA`, `` and `pathB`. The first container created will
 //		    receive `pathA`, the second will not receive value, and the third receive `pathB`.
 func (el *ContainerFromImage) Volumes(containerPath string, hostPath ...string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	var err error
 
 	if el.volumeContainer == nil {
@@ -137,6 +145,7 @@ func (el *ContainerFromImage) Volumes(containerPath string, hostPath ...string) 
 		if hostPath[k] != "" {
 			absolutePath, err = filepath.Abs(hostPath[k])
 			if err != nil {
+				monitor.Err = true
 				el.manager.ErrorCh <- fmt.Errorf("containerFromImage.Volumes().error: %v", err)
 				return el
 			}
@@ -168,6 +177,10 @@ func (el *ContainerFromImage) Volumes(containerPath string, hostPath ...string) 
 //	    - Imagine creating 3 containers and passing the values 27016, 0 and 27015. The first container created will
 //	    receive 27016, the second will not receive value, and the third receive 27015.
 func (el *ContainerFromImage) Ports(containerProtocol string, containerPort int64, localPort ...int64) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	if el.portsContainer == nil {
 		el.portsContainer = make([]nat.Port, 0)
 		el.portsHost = make([][]int64, 0)
@@ -175,6 +188,7 @@ func (el *ContainerFromImage) Ports(containerProtocol string, containerPort int6
 
 	port, err := nat.NewPort(containerProtocol, strconv.FormatInt(containerPort, 10))
 	if err != nil {
+		monitor.Err = true
 		el.manager.ErrorCh <- fmt.Errorf("containerFromImage.ExposePorts().error: %v", err)
 		return
 	}
@@ -236,6 +250,10 @@ func (el *ContainerFromImage) Ports(containerProtocol string, containerPort int6
 //
 // https://docs.docker.com/engine/reference/builder/#onbuild
 func (el *ContainerFromImage) OnBuild(onBuild ...string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	if len(onBuild) == 0 {
 		onBuild = nil
 	}
@@ -248,6 +266,10 @@ func (el *ContainerFromImage) OnBuild(onBuild ...string) (ref *ContainerFromImag
 //
 // Defines the hostname of the container
 func (el *ContainerFromImage) HostName(name string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.DockerSys[0].Config.Hostname = name
 	return el
 }
@@ -256,6 +278,10 @@ func (el *ContainerFromImage) HostName(name string) (ref *ContainerFromImage) {
 //
 // Defines the domain name of the container
 func (el *ContainerFromImage) DomainName(name string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.DockerSys[0].Config.Domainname = name
 	return el
 }
@@ -264,6 +290,10 @@ func (el *ContainerFromImage) DomainName(name string) (ref *ContainerFromImage) 
 //
 // User that will run the command(s) inside the container, also support user:group
 func (el *ContainerFromImage) User(name string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.DockerSys[0].Config.User = name
 	return el
 }
@@ -272,6 +302,10 @@ func (el *ContainerFromImage) User(name string) (ref *ContainerFromImage) {
 //
 // Attach standard streams to a tty, including stdin if it is not closed
 func (el *ContainerFromImage) Tty(tty bool) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.DockerSys[0].Config.Tty = tty
 	return el
 }
@@ -280,6 +314,10 @@ func (el *ContainerFromImage) Tty(tty bool) (ref *ContainerFromImage) {
 //
 // Open stdin
 func (el *ContainerFromImage) OpenStdin(open bool) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.DockerSys[0].Config.OpenStdin = open
 	return el
 }
@@ -288,6 +326,10 @@ func (el *ContainerFromImage) OpenStdin(open bool) (ref *ContainerFromImage) {
 //
 // If true, close stdin after the 1 attached client disconnects
 func (el *ContainerFromImage) StdinOnce(once bool) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.DockerSys[0].Config.StdinOnce = once
 	return el
 }
@@ -296,6 +338,10 @@ func (el *ContainerFromImage) StdinOnce(once bool) (ref *ContainerFromImage) {
 //
 // List of environment variable to set in the container
 func (el *ContainerFromImage) EnvironmentVar(env ...[]string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	if len(env) == 0 {
 		env = nil
 		return el
@@ -309,6 +355,10 @@ func (el *ContainerFromImage) EnvironmentVar(env ...[]string) (ref *ContainerFro
 //
 // Command to run when starting the container
 func (el *ContainerFromImage) Cmd(cmd ...string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	if len(cmd) == 0 {
 		cmd = nil
 	}
@@ -321,6 +371,10 @@ func (el *ContainerFromImage) Cmd(cmd ...string) (ref *ContainerFromImage) {
 //
 // True if command is already escaped (meaning treat as a command line) (Windows specific)
 func (el *ContainerFromImage) ArgsEscaped(argsEscaped bool) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.DockerSys[0].Config.ArgsEscaped = argsEscaped
 	return el
 }
@@ -329,6 +383,10 @@ func (el *ContainerFromImage) ArgsEscaped(argsEscaped bool) (ref *ContainerFromI
 //
 // Current directory (PWD) in the command will be launched
 func (el *ContainerFromImage) WorkingDir(workingDir string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.DockerSys[0].Config.WorkingDir = workingDir
 	return el
 }
@@ -337,6 +395,10 @@ func (el *ContainerFromImage) WorkingDir(workingDir string) (ref *ContainerFromI
 //
 // Entrypoint to run when starting the container
 func (el *ContainerFromImage) Entrypoint(entrypoint ...string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	if len(entrypoint) == 0 {
 		entrypoint = nil
 	}
@@ -349,6 +411,10 @@ func (el *ContainerFromImage) Entrypoint(entrypoint ...string) (ref *ContainerFr
 //
 // Is network disabled
 func (el *ContainerFromImage) NetworkDisabled(disabled bool) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.DockerSys[0].Config.NetworkDisabled = disabled
 	return el
 }
@@ -357,6 +423,10 @@ func (el *ContainerFromImage) NetworkDisabled(disabled bool) (ref *ContainerFrom
 //
 // Mac Address of the container
 func (el *ContainerFromImage) MacAddress(macAddress string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.DockerSys[0].Config.MacAddress = macAddress
 	return el
 }
@@ -365,6 +435,10 @@ func (el *ContainerFromImage) MacAddress(macAddress string) (ref *ContainerFromI
 //
 // List of labels set to this container
 func (el *ContainerFromImage) Labels(labels map[string]string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.DockerSys[0].Config.Labels = labels
 	return el
 }
@@ -373,6 +447,10 @@ func (el *ContainerFromImage) Labels(labels map[string]string) (ref *ContainerFr
 //
 // Signal to stop a container
 func (el *ContainerFromImage) StopSignal(signal string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.DockerSys[0].Config.StopSignal = signal
 	return el
 }
@@ -381,6 +459,10 @@ func (el *ContainerFromImage) StopSignal(signal string) (ref *ContainerFromImage
 //
 // Timeout to stop the container after command `container.Stop()`
 func (el *ContainerFromImage) StopTimeout(timeout time.Duration) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	timeoutRef := int(timeout)
 	el.manager.DockerSys[0].Config.StopTimeout = &timeoutRef
 	return el
@@ -390,6 +472,10 @@ func (el *ContainerFromImage) StopTimeout(timeout time.Duration) (ref *Container
 //
 // Shell for shell-form of RUN, CMD, ENTRYPOINT
 func (el *ContainerFromImage) Shell(shell ...string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	if len(shell) == 0 {
 		shell = nil
 	}
@@ -414,6 +500,10 @@ func (el *ContainerFromImage) Shell(shell ...string) (ref *ContainerFromImage) {
 //	    * {"CMD", args...} : exec arguments directly
 //	    * {"CMD-SHELL", command} : run command with system's default shell
 func (el *ContainerFromImage) Healthcheck(interval, timeout, startPeriod time.Duration, retries int, test ...string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.DockerSys[0].Config.Healthcheck = &dockerContainer.HealthConfig{
 		Test:        test,
 		Interval:    interval,
@@ -440,14 +530,20 @@ func (el *ContainerFromImage) Healthcheck(interval, timeout, startPeriod time.Du
 //	| 392846000 | 389797833 | 37                     | -1                   | 0                        | 0                              | 0                               | 8            | 128585060000000    | 5392002000               | 2341771000                 | 7733774000        | 0                    | 0                       | 0                        | 8                | 128577290000000        | 5213464000                   | 2236247000                     | 7449711000            | 0                        | 0                           | 0                            | 12544057344    | 0                    | 0               | 0                 | 91275264       | 0                  | 0                            |
 //	| 438223378 | 435128169 | 36                     | -1                   | 0                        | 0                              | 0                               | 8            | 128632160000000    | 6476036000               | 2913993000                 | 9390029000        | 0                    | 0                       | 0                        | 8                | 128624350000000        | 6290689000                   | 2803815000                     | 9094505000            | 0                        | 0                           | 0                            | 12544057344    | 0                    | 0               | 0                 | 97112064       | 0                  | 0                            |
 func (el *ContainerFromImage) SaveStatistics(path string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	var err error
 	var fileInfo os.FileInfo
 	if fileInfo, err = os.Stat(path); err != nil {
 		if err = os.MkdirAll(path, fs.ModePerm); err != nil {
+			monitor.Err = true
 			el.manager.ErrorCh <- fmt.Errorf("container.SaveStatistics().MkdirAll().error: %v", "directory not found")
 			return el
 		}
 	} else if !fileInfo.IsDir() {
+		monitor.Err = true
 		el.manager.ErrorCh <- fmt.Errorf("container.SaveStatistics().error: %v", "directory not found")
 		return el
 	}
@@ -460,6 +556,10 @@ func (el *ContainerFromImage) SaveStatistics(path string) (ref *ContainerFromIma
 //
 // Replaces or adds files to the project, in the temporary folder, before the image is created.
 func (el *ContainerFromImage) ReplaceBeforeBuild(dst, src string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	var err error
 	if el.replaceBeforeBuild == nil {
 		el.replaceBeforeBuild = make([][]string, 0)
@@ -467,6 +567,7 @@ func (el *ContainerFromImage) ReplaceBeforeBuild(dst, src string) (ref *Containe
 
 	src, err = filepath.Abs(src)
 	if err != nil {
+		monitor.Err = true
 		el.manager.ErrorCh <- fmt.Errorf("container.ReplaceBeforeBuild().error: %v", err)
 		return el
 	}
@@ -484,14 +585,20 @@ func (el *ContainerFromImage) ReplaceBeforeBuild(dst, src string) (ref *Containe
 //	  path: path to save the container standard output
 //	  flags: texts to be searched for in the container standard output
 func (el *ContainerFromImage) FailFlag(path string, flags ...string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	var err error
 	var fileInfo os.FileInfo
 	if fileInfo, err = os.Stat(path); err != nil {
 		if err = os.MkdirAll(path, fs.ModePerm); err != nil {
+			monitor.Err = true
 			el.manager.ErrorCh <- fmt.Errorf("container.FailFlag().MkdirAll().error: %v", "directory not found")
 			return el
 		}
 	} else if !fileInfo.IsDir() {
+		monitor.Err = true
 		el.manager.ErrorCh <- fmt.Errorf("container.FailFlag().error: %v", "directory not found")
 		return el
 	}
@@ -506,11 +613,16 @@ func (el *ContainerFromImage) FailFlag(path string, flags ...string) (ref *Conta
 //
 // Start the container after build
 func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	var err error
 
 	for i := 0; i != el.copies; i += 1 {
 		err = el.manager.DockerSys[i].ContainerStart(el.manager.Id[i])
 		if err != nil {
+			monitor.Err = true
 			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerStart().error: %v", i, err)
 			return el
 		}
@@ -520,11 +632,13 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 	for i := 0; i != el.copies; i += 1 {
 		inspect, err = el.manager.DockerSys[i].ContainerInspect(el.manager.Id[i])
 		if err != nil {
+			monitor.Err = true
 			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerInspect().error: %v", i, err)
 			return el
 		}
 
 		if inspect.State == nil || inspect.State.Running == false {
+			monitor.Err = true
 			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().error: %v", i, "container is't running")
 			return el
 		}
@@ -740,6 +854,7 @@ func (el *ContainerFromImage) chaosExecuteAction() (end bool) {
 				if chaos.action != nil {
 					log.Printf("%v: %v", chaos.display, el.manager.DockerSys[iCopy].ContainerName)
 					if err = chaos.action(chaos.id); err != nil {
+						monitor.Err = true
 						el.manager.ErrorCh <- fmt.Errorf("container[%v].chaosExecuteAction().chaos.action(%v).error: %v", iCopy, chaos.id, err)
 						return
 					}
@@ -793,6 +908,7 @@ func (el *ContainerFromImage) failFlagThread() {
 
 					logs, err = el.manager.DockerSys[i].ContainerLogs(el.manager.Id[i])
 					if err != nil {
+						monitor.Err = true
 						el.manager.ErrorCh <- fmt.Errorf("container[%v].failFlagThread().ContainerLogs().error: %v", i, err)
 						return
 					}
@@ -844,6 +960,7 @@ func (el *ContainerFromImage) logsSearchAndReplaceIntoText(key int, logs *[]byte
 				if pathLog != "" {
 					dirList, err = ioutil.ReadDir(pathLog)
 					if err != nil {
+						monitor.Err = true
 						el.manager.ErrorCh <- fmt.Errorf("container.logsSearchAndReplaceIntoText().ioutil.ReadDir(%v).error: %v", pathLog, err)
 						return
 					}
@@ -851,6 +968,7 @@ func (el *ContainerFromImage) logsSearchAndReplaceIntoText(key int, logs *[]byte
 					var path = filepath.Join(pathLog, el.containerName+"_"+strconv.FormatInt(int64(key), 10)+"."+totalOfFiles+".fail.log")
 					err = ioutil.WriteFile(path, *logs, fs.ModePerm)
 					if err != nil {
+						monitor.Err = true
 						el.manager.ErrorCh <- fmt.Errorf("container.logsSearchAndReplaceIntoText().ioutil.WriteFile(%v).error: %v", path, err)
 						return
 					}
@@ -897,6 +1015,7 @@ func (el *ContainerFromImage) statsThread() {
 			_ = os.Remove(filePath)
 			file[i], err = os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, fs.ModePerm)
 			if err != nil {
+				monitor.Err = true
 				el.manager.ErrorCh <- fmt.Errorf("container[%v].statsThread().OpenFile().error: %v", i, err)
 				return
 			}
@@ -963,6 +1082,7 @@ func (el *ContainerFromImage) statsThread() {
 			writer = csv.NewWriter(file[i])
 			err = writer.WriteAll(line)
 			if err != nil {
+				monitor.Err = true
 				el.manager.ErrorCh <- fmt.Errorf("container[%v].statsThread().WriteAll(0).error: %v", i, err)
 				return
 			}
@@ -975,6 +1095,7 @@ func (el *ContainerFromImage) statsThread() {
 
 					stats, err = el.manager.DockerSys[i].ContainerStatisticsOneShot(el.manager.Id[i])
 					if err != nil {
+						monitor.Err = true
 						el.manager.ErrorCh <- fmt.Errorf("container[%v].statsThread().ContainerInspect().error: %v", i, err)
 						continue
 					}
@@ -1054,6 +1175,7 @@ func (el *ContainerFromImage) statsThread() {
 					writer = csv.NewWriter(file[i])
 					err = writer.WriteAll(line)
 					if err != nil {
+						monitor.Err = true
 						el.manager.ErrorCh <- fmt.Errorf("container[%v].statsThread().WriteAll(1).error: %v", i, err)
 						return
 					}
@@ -1074,6 +1196,10 @@ func (el *ContainerFromImage) statsThread() {
 //	  containerName: name from container
 //	  copies: number total of containers
 func (el *ContainerFromImage) Create(containerName string, copies int) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	var err error
 
 	if copies == 0 {
@@ -1100,6 +1226,7 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 
 	err = el.imageBuild()
 	if err != nil {
+		monitor.Err = true
 		el.manager.ErrorCh <- fmt.Errorf("container.Create().imageBuild().error: %v", err)
 		return el
 	}
@@ -1121,6 +1248,7 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 		if networkManagerGlobal != nil {
 			ipAddress, netConfig, err = networkManagerGlobal.generator.GetNext()
 			if err != nil {
+				monitor.Err = true
 				el.manager.ErrorCh <- fmt.Errorf("container.Create().network.GetNext().error: %v", err)
 				return el
 			}
@@ -1154,6 +1282,7 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 			netConfig,
 		)
 		if err != nil {
+			monitor.Err = true
 			el.manager.ErrorCh <- fmt.Errorf("container[%v].Create().ContainerCreateWithConfig().error: %v", iCopy, err)
 			return el
 		}
@@ -1163,6 +1292,7 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 
 		//todo: fazer warnings - não deve ser erro
 		if len(warnings) != 0 {
+			monitor.Err = true
 			el.manager.ErrorCh <- fmt.Errorf("container[%v].Create().ContainerCreateWithConfig().warnings: %v", iCopy, strings.Join(warnings, "; "))
 			return el
 		}
@@ -1588,6 +1718,7 @@ func (el *ContainerFromImage) imageExpirationTimeIsValid() (valid bool) {
 	var inspect types.ImageInspect
 	inspect, err = el.manager.DockerSys[0].ImageInspect(el.imageId)
 	if err != nil {
+		monitor.Err = true
 		el.manager.ErrorCh <- fmt.Errorf("container.imageExpirationTimeIsValid().ImageInspect().error: %v", err)
 		return
 	}
@@ -1595,6 +1726,7 @@ func (el *ContainerFromImage) imageExpirationTimeIsValid() (valid bool) {
 	var imageCreated time.Time
 	imageCreated, err = time.Parse(time.RFC3339Nano, inspect.Created)
 	if err != nil {
+		monitor.Err = true
 		el.manager.ErrorCh <- fmt.Errorf("container.imageExpirationTimeIsValid().Parse().error: %v", err)
 		return
 	}
@@ -1908,6 +2040,10 @@ type DockerfileAuto interface {
 //	seccomp=unconfined     — Desliga o confinamento causado pelo seccomp do linux ao container
 //	seccomp=profile.json   — White-listed syscalls seccomp Json file to be used as a seccomp filter
 func (el *ContainerFromImage) SetImageBuildOptionsSecurityOpt(value []string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.SecurityOpt = value
 	return el
 }
@@ -1970,6 +2106,10 @@ func (el *ContainerFromImage) SetImageBuildOptionsSecurityOpt(value []string) (r
 //	    ARG GIT_PRIVATE_REPO
 //	    RUN go env -w GOPRIVATE=$GIT_PRIVATE_REPO
 func (el *ContainerFromImage) AddImageBuildOptionsBuildArgs(key string, value *string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	if el.manager.ImageBuildOptions.BuildArgs == nil {
 		el.manager.ImageBuildOptions.BuildArgs = make(map[string]*string)
 	}
@@ -2045,8 +2185,13 @@ func (el *ContainerFromImage) addImageBuildOptionsGitCredentials() {
 //
 //   - Veja a documentação de múltiplos estágios para mais detalhes.
 //     See https://docs.docker.com/develop/develop-images/multistage-build/
-func (el *ContainerFromImage) Target(value string) {
+func (el *ContainerFromImage) Target(value string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.Target = value
+	return el
 }
 
 // Squash
@@ -2066,8 +2211,13 @@ func (el *ContainerFromImage) Target(value string) {
 //
 //	 Entrada:
 //	   value: true preserva a imagem original e cria uma nova imagem a partir da imagem pai
-func (el *ContainerFromImage) Squash(value bool) {
+func (el *ContainerFromImage) Squash(value bool) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.Squash = value
+	return el
 }
 
 // Platform
@@ -2098,8 +2248,13 @@ func (el *ContainerFromImage) Squash(value bool) {
 //	osx
 //	windows/amd64
 //	linux/arm64/v8
-func (el *ContainerFromImage) Platform(value string) {
+func (el *ContainerFromImage) Platform(value string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.Platform = value
+	return el
 }
 
 // NoCache
@@ -2111,9 +2266,14 @@ func (el *ContainerFromImage) Platform(value string) {
 // Português:
 //
 //	Define a opção `sem cache` para a construção da imagem
-func (el *ContainerFromImage) NoCache() {
+func (el *ContainerFromImage) NoCache() (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.enableCache = false
 	el.manager.ImageBuildOptions.NoCache = true
+	return el
 }
 
 //User memory constraints🔗
@@ -2184,6 +2344,10 @@ func (el *ContainerFromImage) NoCache() {
 //   - Use value * KKiloByte, value * KMegaByte e value * KGigaByte
 //     See https://docs.docker.com/engine/reference/run/#user-memory-constraints
 func (el *ContainerFromImage) MemorySwap(value int64) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.MemorySwap = value
 
 	//e.addProblem("The SetImageBuildOptionsMemorySwap() function can generate an error when building the image.")
@@ -2266,6 +2430,10 @@ func (el *ContainerFromImage) MemorySwap(value int64) (ref *ContainerFromImage) 
 //   - Use value * KKiloByte, value * KMegaByte e value * KGigaByte
 //     See https://docs.docker.com/engine/reference/run/#user-memory-constraints
 func (el *ContainerFromImage) Memory(value int64) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.Memory = value
 
 	//e.addProblem("The SetImageBuildOptionsMemory() function can generate an error when building the image.")
@@ -2282,6 +2450,10 @@ func (el *ContainerFromImage) Memory(value int64) (ref *ContainerFromImage) {
 //
 //	Determina o método de isolamento do processo
 func (el *ContainerFromImage) IsolationProcess() (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.Isolation = dockerContainer.IsolationProcess
 	return el
 }
@@ -2296,6 +2468,10 @@ func (el *ContainerFromImage) IsolationProcess() (ref *ContainerFromImage) {
 //
 //	Define o método de isolamento como sendo HyperV
 func (el *ContainerFromImage) IsolationHyperV() (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.Isolation = dockerContainer.IsolationHyperV
 	return el
 }
@@ -2310,6 +2486,10 @@ func (el *ContainerFromImage) IsolationHyperV() (ref *ContainerFromImage) {
 //
 //	Define o método de isolamento do processo como sendo o mesmo do deamon
 func (el *ContainerFromImage) IsolationDefault() (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.Isolation = dockerContainer.IsolationDefault
 	return el
 }
@@ -2358,6 +2538,10 @@ func (el *ContainerFromImage) IsolationDefault() (ref *ContainerFromImage) {
 //	  162.242.195.82 somehost
 //	  50.31.209.229 otherhost
 func (el *ContainerFromImage) ExtraHosts(values []string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.ExtraHosts = values
 	return el
 }
@@ -2386,6 +2570,10 @@ func (el *ContainerFromImage) ExtraHosts(values []string) (ref *ContainerFromIma
 //
 //	As imagens especificadas aqui não precisam ter uma cadeia pai válida para corresponder a cache.
 func (el *ContainerFromImage) CacheFrom(values []string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.CacheFrom = values
 	return el
 }
@@ -2433,6 +2621,10 @@ func (el *ContainerFromImage) CacheFrom(values []string) (ref *ContainerFromImag
 //
 //	Não garante ou reserva nenhum acesso específico à CPU.
 func (el *ContainerFromImage) Shares(value int64) (ref *ContainerFromImage) { //cpu
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.CPUShares = value
 	return el
 }
@@ -2465,6 +2657,10 @@ func (el *ContainerFromImage) Shares(value int64) (ref *ContainerFromImage) { //
 //	Se você tiver quatro nodes de memória em seu sistema (0-3), use --cpuset-mems=0,1 então, os
 //	processos em seu container do Docker usarão apenas a memória dos dois primeiros nodes.
 func (el *ContainerFromImage) Mems(value string) (ref *ContainerFromImage) { //cpu
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.CPUSetMems = value
 	return el
 }
@@ -2501,6 +2697,10 @@ func (el *ContainerFromImage) Mems(value string) (ref *ContainerFromImage) { //c
 //	Um valor válido pode ser 0-3 (para usar a primeira, segunda, terceira e quarta CPU) ou 1,3 (para
 //	usar a segunda e a quarta CPU).
 func (el *ContainerFromImage) CPUs(value string) (ref *ContainerFromImage) { //cpu
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.CPUSetCPUs = value
 
 	//e.addProblem("The SetImageBuildOptionsCPUSetCPUs() function can generate an error when building the image.")
@@ -2545,6 +2745,10 @@ func (el *ContainerFromImage) CPUs(value string) (ref *ContainerFromImage) { //c
 //
 //	Não garante ou reserva nenhum acesso específico à CPU.
 func (el *ContainerFromImage) Quota(value int64) (ref *ContainerFromImage) { //cpu
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.CPUQuota = value
 
 	//e.addProblem("The SetImageBuildOptionsCPUQuota() function can generate an error when building the image.")
@@ -2576,6 +2780,10 @@ func (el *ContainerFromImage) Quota(value int64) (ref *ContainerFromImage) { //c
 //
 //	Para a maioria dos casos de uso, --cpus é uma alternativa mais conveniente.
 func (el *ContainerFromImage) Period(value int64) (ref *ContainerFromImage) { //cpu
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.CPUPeriod = value
 
 	//e.addProblem("The SetImageBuildOptionsCPUPeriod() function can generate an error when building the image.")
@@ -2592,6 +2800,10 @@ func (el *ContainerFromImage) Period(value int64) (ref *ContainerFromImage) { //
 //
 // Define um arquivo Dockerfile para construir a imagem.
 func (el *ContainerFromImage) DockerfilePath(path string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.manager.ImageBuildOptions.Dockerfile = path
 	return el
 }
@@ -2600,11 +2812,19 @@ func (el *ContainerFromImage) DockerfilePath(path string) (ref *ContainerFromIma
 //
 // Defines the dockerfile generator object
 func (el *ContainerFromImage) AutoDockerfileGenerator(autoDockerfile DockerfileAuto) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.autoDockerfile = autoDockerfile
 	return el
 }
 
 func (el *ContainerFromImage) EnableChaos(maxStopped, maxPaused, maxPausedStoppedSameTime, maxRemove int, changeIpProbability float64) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.ChaosMaxStopped = maxStopped
 	el.ChaosMaxPaused = maxPaused
 	el.ChaosMaxPausedStoppedSameTime = maxPausedStoppedSameTime
@@ -2640,6 +2860,10 @@ func (el *ContainerFromImage) EnableChaos(maxStopped, maxPaused, maxPausedStoppe
 //	 Notas:
 //	   * Para mudar o nome do arquivo ssh usado como chave, use a função SetSshKeyFileName().
 func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	var err error
 	var userData *user.User
 	var fileData []byte
@@ -2647,6 +2871,7 @@ func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (ref *ContainerFromI
 
 	userData, err = user.Current()
 	if err != nil {
+		monitor.Err = true
 		el.manager.ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().Current().error: %v", err)
 		return el
 	}
@@ -2654,6 +2879,7 @@ func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (ref *ContainerFromI
 	if el.sshDefaultFileName == "" {
 		el.sshDefaultFileName, err = el.GetSshKeyFileName(userData.HomeDir)
 		if err != nil {
+			monitor.Err = true
 			el.manager.ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().GetSshKeyFileName().error: %v", err)
 			return el
 		}
@@ -2662,6 +2888,7 @@ func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (ref *ContainerFromI
 	filePathToRead = filepath.Join(userData.HomeDir, ".ssh", el.sshDefaultFileName)
 	fileData, err = ioutil.ReadFile(filePathToRead)
 	if err != nil {
+		monitor.Err = true
 		el.manager.ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile(0).error: %v", err)
 		return el
 	}
@@ -2672,6 +2899,7 @@ func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (ref *ContainerFromI
 	filePathToRead = filepath.Join(userData.HomeDir, ".ssh", "known_hosts")
 	fileData, err = ioutil.ReadFile(filePathToRead)
 	if err != nil {
+		monitor.Err = true
 		el.manager.ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile(1).error: %v", err)
 		return el
 	}
@@ -2682,6 +2910,7 @@ func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (ref *ContainerFromI
 	filePathToRead = filepath.Join(userData.HomeDir, ".gitconfig")
 	fileData, err = ioutil.ReadFile(filePathToRead)
 	if err != nil {
+		monitor.Err = true
 		el.manager.ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile(2).error: %v", err)
 		return el
 	}
@@ -2827,9 +3056,14 @@ func (el *ContainerFromImage) GetSshKeyFileName(dir string) (fileName string, er
 //	var container = ContainerBuilder{}
 //	container.SetGitCloneToBuildWithPrivateToken(url, privateToken)
 //	container.SetGitConfigFile(string(file))
-func (el *ContainerFromImage) GitCloneToBuildWithPrivateToken(url, privateToken string) {
+func (el *ContainerFromImage) GitCloneToBuildWithPrivateToken(url, privateToken string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.gitUrl = url
 	el.gitPrivateToke = privateToken
+	return el
 }
 
 // GitCloneToBuild
@@ -2891,8 +3125,13 @@ func (el *ContainerFromImage) GitCloneToBuildWithPrivateToken(url, privateToken 
 //     '.*Dockerfile.*' e '.*dockerfile.*';
 //   - O repositório pode ser definido pelos métodos SetGitCloneToBuild(),
 //     SetGitCloneToBuildWithPrivateSshKey(), SetGitCloneToBuildWithPrivateToken() e SetGitCloneToBuildWithUserPassworh().
-func (el *ContainerFromImage) GitCloneToBuild(url string) {
+func (el *ContainerFromImage) GitCloneToBuild(url string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.gitUrl = url
+	return el
 }
 
 // GetGitCloneToBuild
@@ -2976,8 +3215,13 @@ func (el *ContainerFromImage) GetGitCloneToBuild() (url string) {
 //   - O repositório pode ser definido pelos métodos SetGitCloneToBuild(),
 //     SetGitCloneToBuildWithPrivateSshKey(), SetGitCloneToBuildWithPrivateToken() e
 //     SetGitCloneToBuildWithUserPassworh().
-func (el *ContainerFromImage) GitSshPassword(password string) {
+func (el *ContainerFromImage) GitSshPassword(password string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.gitPassword = password
+	return el
 }
 
 // GitCloneToBuildWithPrivateSSHKey
@@ -3086,10 +3330,15 @@ func (el *ContainerFromImage) GitSshPassword(password string) {
 //	var container = ContainerBuilder{}
 //	container.SetGitCloneToBuildWithPrivateSSHKey(url, privateSSHKeyPath, password)
 //	container.SetGitConfigFile(string(file))
-func (el *ContainerFromImage) GitCloneToBuildWithPrivateSSHKey(url, privateSSHKeyPath, password string) {
+func (el *ContainerFromImage) GitCloneToBuildWithPrivateSSHKey(url, privateSSHKeyPath, password string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.gitUrl = url
 	el.gitSshPrivateKeyPath = privateSSHKeyPath
 	el.gitPassword = password
+	return el
 }
 
 // gitMakePublicSshKey
@@ -3154,6 +3403,20 @@ func (el *ContainerFromImage) gitMakePublicSshKey() (publicKeys *sshGit.PublicKe
 //	 Entrada:
 //	   value: Caminho do repositório privado. Ex.: github.com/helmutkemper
 func (el *ContainerFromImage) GitPathPrivateRepository(value string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
 	el.gitPathPrivateRepository = value
 	return el
 }
+
+//func (el *ContainerFromImage) Command(copyKey int, commands ...string) (
+//  exitCode int,
+//  running bool,
+//  stdOutput []byte,
+//  stdError []byte,
+//  err error,
+//) {
+//  return el.manager.DockerSys[copyKey].ContainerExecCommand(el.manager.Id[copyKey], commands)
+//}

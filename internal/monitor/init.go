@@ -11,6 +11,8 @@ var DoneChList = make([]<-chan struct{}, 0)
 var EndFunc = make([]func(), 0)
 var ChaosFunc = make([]func(), 0)
 
+var Err bool
+
 var counterEndFunc = 0
 
 func AddChaosFunc(f ...func()) {
@@ -29,11 +31,13 @@ func EndAll() {
 }
 
 func Monitor() (pass bool) {
-	for k := range ChaosFunc {
-		if ChaosFunc[k] != nil {
-			ChaosFunc[k]()
-		} else {
-			log.Printf("bug: chaos func is nil")
+	if !Err {
+		for k := range ChaosFunc {
+			if ChaosFunc[k] != nil {
+				ChaosFunc[k]()
+			} else {
+				log.Printf("bug: chaos func is nil")
+			}
 		}
 	}
 

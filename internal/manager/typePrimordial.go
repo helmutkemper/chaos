@@ -3,6 +3,8 @@ package manager
 import (
 	"fmt"
 	"github.com/helmutkemper/chaos/internal/monitor"
+	"github.com/helmutkemper/chaos/internal/standalone"
+	"strings"
 	"time"
 )
 
@@ -26,6 +28,11 @@ type Primordial struct {
 //	  * If a network with the same name and different configuration already exists, the network will be deleted and a new network created.
 func (el *Primordial) NetworkCreate(name, subnet, gateway string) (ref *Primordial) {
 	var err error
+
+	if !strings.Contains(name, "delete") {
+		name = "delete_" + name
+	}
+
 	if err = el.manager.networkCreate(name, subnet, gateway); err != nil {
 		el.manager.ErrorCh <- fmt.Errorf("primordial.NetworkCreate().error: %v", err)
 		return el
@@ -42,6 +49,11 @@ func (el *Primordial) Monitor(duration time.Duration) (pass bool) {
 	}()
 
 	return monitor.Monitor()
+}
+
+func (el *Primordial) GarbageCollector() (ref *Primordial) {
+	standalone.GarbageCollector()
+	return el
 }
 
 //
