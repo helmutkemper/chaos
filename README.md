@@ -2,7 +2,7 @@
 
 ### Basic usage
 
-This example turns a git repository into a container
+### Using a git server
 
 ```go
 package githubproject
@@ -33,7 +33,7 @@ func TestLinear(t *testing.T) {
 }
 ```
 
-This example turns an image into a container
+### Using a docker image
 
 ```go
 package mongodbproject
@@ -64,7 +64,7 @@ func TestLinear(t *testing.T) {
 }
 ```
 
-This example turns a local folder into a container
+### Using a local folder
 
 ```go
 package localFolderProject
@@ -95,4 +95,45 @@ func TestDevOps_Linear(t *testing.T) {
 }
 ```
 
-> Requires Docker installed
+### Example
+
+```go
+package localFolderProject
+
+import (
+  "github.com/helmutkemper/chaos/factory"
+  "testing"
+  "time"
+)
+
+func TestDevOps_Linear(t *testing.T) {
+  primordial := factory.NewPrimordial().
+    NetworkCreate("chaos_network", "10.0.0.0/16", "10.0.0.1").
+    Test(t)
+
+  factory.NewContainerFromImage("nats:latest").
+    EnableChaos(2,2,2,0.0).
+    FailFlag("./bug", "panic:", "bug:", "error").
+    SaveStatistics("./").
+    Ports("tcp", 4222, 4222, 4223, 4224).
+    Create("nats", 3).
+    Start()
+
+  factory.NewContainerFromFolder(
+    "folder:latest",
+    "./project",
+  ).
+    MakeDockerfile().
+    EnableChaos(2,2,2,0.0).
+    FailFlag("./bug", "panic:", "bug:", "error").
+    SaveStatistics("./").
+    Create("folder", 3).
+    Start()
+
+  if !primordial.Monitor(60 * time.Minute) {
+    t.FailNow()
+  }
+}
+```
+
+> O arquivo `main.go` e `go.mod` devem está contidos da pasta raiz do projeto
