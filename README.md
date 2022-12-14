@@ -1,6 +1,15 @@
 # Chaos Test
 
-### Basic usage
+This project aims to create chaos testing for microservices, allowing to transform a simple golang test into a chaos 
+test.
+
+The focus of this project is to allow the chaos test still in the development of the project and try to solve the 
+famous problem, on my machine it works!
+
+The test consists of creating all the necessary infrastructure for the project to work on the developer's machine, 
+using docker, and after that, pausing or dropping containers, stopping the data flow in the middle of the process.
+
+## Basic usage
 
 ### Using a git server
 
@@ -95,7 +104,7 @@ func TestDevOps_Linear(t *testing.T) {
 }
 ```
 
-### Example
+## Example
 
 ```go
 package localFolderProject
