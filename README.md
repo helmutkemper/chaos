@@ -136,4 +136,4 @@ func TestDevOps_Linear(t *testing.T) {
 }
 ```
 
-> O arquivo `main.go` e `go.mod` devem está contidos da pasta raiz do projeto
+> The `main.go` and `go.mod` files must be contained in the root folder of the project
