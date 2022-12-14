@@ -81,7 +81,7 @@ func TestContainerFromImage_Primordial(t *testing.T) {
 		Create("mongo", 1).
 		Start()
 
-	if !manager.Primordial().Monitor(1 * time.Minute) {
+	if !manager.Primordial().Monitor(5 * time.Minute) {
 		t.Fail()
 	}
 

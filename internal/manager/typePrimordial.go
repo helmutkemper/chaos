@@ -41,6 +41,13 @@ func (el *Primordial) NetworkCreate(name, subnet, gateway string) (ref *Primordi
 	return el
 }
 
+// Monitor
+//
+// Monitors the test for errors while waiting for the test to end.
+//
+//	Notes:
+//	  * When the test timer ends, Monitor() waits for all test pipelines to finish, hooking up all containers at the
+//	    end of the test
 func (el *Primordial) Monitor(duration time.Duration) (pass bool) {
 	var timer = time.NewTimer(duration)
 	go func() {
@@ -51,8 +58,18 @@ func (el *Primordial) Monitor(duration time.Duration) (pass bool) {
 	return monitor.Monitor()
 }
 
-func (el *Primordial) GarbageCollector() (ref *Primordial) {
-	standalone.GarbageCollector()
+// GarbageCollector
+//
+// Deletes all Docker elements with `delete` in the name.
+//
+//	Input:
+//	  names: additional list of terms to be deleted
+//
+//	Example:
+//	  GarbageCollector("mongo") will delete any docker element with the term `mongo` contained in the name, which
+//	  includes the image named `mongo:latest`, container named `mongodb` and network name `mongodb_network`
+func (el *Primordial) GarbageCollector(names ...string) (ref *Primordial) {
+	standalone.GarbageCollector(names...)
 	return el
 }
 
