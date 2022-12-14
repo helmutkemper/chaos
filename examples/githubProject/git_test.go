@@ -1,13 +1,16 @@
-package main
+package githubproject
 
 import (
 	"github.com/helmutkemper/chaos/factory"
 	"log"
+	"testing"
 	"time"
 )
 
-func main() {
+func TestLinear(t *testing.T) {
+
 	primordial := factory.NewPrimordial()
+
 	primordial.NetworkCreate("mongo", "10.0.0.0/16", "10.0.0.1")
 
 	factory.NewManager().
@@ -19,7 +22,7 @@ func main() {
 		Create("public", 1).
 		Start()
 
-	if !primordial.Monitor(5 * time.Minute) {
+	if !primordial.Monitor(1 * time.Minute) {
 		log.Print("fail!")
 	}
 

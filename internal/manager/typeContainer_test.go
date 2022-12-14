@@ -3,11 +3,14 @@ package manager
 import (
 	"github.com/helmutkemper/chaos/internal/standalone"
 	"log"
+	"os"
 	"testing"
 	"time"
 )
 
 func TestContainerFromImage_Primordial(t *testing.T) {
+	_ = os.Chdir("./") //todo: apagar esta linha
+
 	standalone.GarbageCollector()
 	t.Cleanup(func() {
 		standalone.GarbageCollector()
@@ -73,12 +76,12 @@ func TestContainerFromImage_Primordial(t *testing.T) {
 		SaveStatistics("../../").
 		EnableChaos(1, 1, 2, 1.0).
 		Ports("tcp", 27017, 27016, 27015, 27014).
-		Volumes("/data/db", "../../internal/builder/test/data0", "../../internal/builder/test/data1", "../../internal/builder/test/data2").
+		//Volumes("/data/db", "../../internal/builder/test/data0", "../../internal/builder/test/data1", "../../internal/builder/test/data2").
 		EnvironmentVar([]string{"--host 0.0.0.0"}).
 		Create("mongo", 1).
 		Start()
 
-	if !manager.Primordial().Monitor(5 * time.Minute) {
+	if !manager.Primordial().Monitor(1 * time.Minute) {
 		t.Fail()
 	}
 

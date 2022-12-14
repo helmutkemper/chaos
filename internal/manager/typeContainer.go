@@ -669,7 +669,7 @@ func (el *ContainerFromImage) chaosThread() {
 			select {
 			case <-tm.C:
 				end = el.chaosExecuteAction()
-				if end {
+				if end && el.ChaosTestEnd {
 					el.manager.DoneCh <- struct{}{}
 					return
 				}

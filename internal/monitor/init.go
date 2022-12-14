@@ -16,11 +16,11 @@ var Err bool
 var counterEndFunc = 0
 
 func AddChaosFunc(f ...func()) {
-	counterEndFunc += 1
 	ChaosFunc = append(ChaosFunc, f...)
 }
 
 func AddEndFunc(f func()) {
+	counterEndFunc += 1
 	EndFunc = append(EndFunc, f)
 }
 
@@ -45,30 +45,22 @@ func Monitor() (pass bool) {
 	eventFail := mergeFailChannels(FailChList...)
 	eventDone := mergeChannels(DoneChList...)
 
-	var end bool
 	for {
 		select {
 		case err := <-eventError:
-			end = true
 			log.Printf("test error: %v", err)
+			return
 		case fail := <-eventFail:
-			end = true
 			log.Printf("test fail: %v", fail)
+			return
 		case <-eventDone:
 			counterEndFunc -= 1
 			if counterEndFunc <= 0 {
-				end = true
 				pass = true
-				EndAll()
+				return
 			}
 		}
-
-		if end {
-			break
-		}
 	}
-
-	return
 }
 
 func mergeErrorChannels(cs ...<-chan error) <-chan error {
