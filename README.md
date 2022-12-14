@@ -1,5 +1,7 @@
 # Chaos Test
 
+> This is version 3.0, still under development
+
 This project aims to create chaos testing for microservices, allowing to transform a simple golang test into a chaos 
 test.
 
