@@ -5,10 +5,22 @@ import (
 	"github.com/helmutkemper/chaos/internal/standalone"
 )
 
-func NewManager() (reference *manager.Manager) {
-	reference = new(manager.Manager)
-	reference.New()
-	return
+func NewContainerFromGit(imageName, serverPath string) (reference *manager.ContainerFromImage) {
+	ref := new(manager.Manager)
+	ref.New()
+	return ref.ContainerFromGit(imageName, serverPath)
+}
+
+func NewContainerFromFolder(imageName, buildPath string) (reference *manager.ContainerFromImage) {
+	ref := new(manager.Manager)
+	ref.New()
+	return ref.ContainerFromFolder(imageName, buildPath)
+}
+
+func NewContainerFromImage(imageName string) (reference *manager.ContainerFromImage) {
+	ref := new(manager.Manager)
+	ref.New()
+	return ref.ContainerFromImage(imageName)
 }
 
 func NewPrimordial() (reference *manager.Primordial) {
