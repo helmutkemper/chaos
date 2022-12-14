@@ -11,6 +11,13 @@ famous problem, on my machine it works!
 The test consists of creating all the necessary infrastructure for the project to work on the developer's machine, 
 using docker, and after that, pausing or dropping containers, stopping the data flow in the middle of the process.
 
+Imagine making a microservice where three instances must keep data up to date with each other at all times.
+
+The test allows you to create a container for each instance, simulate the data and leave the data flowing, while the 
+containers are paused or restarted at random, pausing the transmission of data unexpectedly, allowing you to capture 
+failures such as loss of connection or excessive delay in the transmission of data.
+
+
 ## Basic usage
 
 ### Using a git server
