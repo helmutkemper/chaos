@@ -5,6 +5,7 @@ import (
 	"github.com/helmutkemper/chaos/internal/monitor"
 	"github.com/helmutkemper/chaos/internal/standalone"
 	"strings"
+	"testing"
 	"time"
 )
 
@@ -12,6 +13,14 @@ var networkManagerGlobal *dockerNetwork
 
 type Primordial struct {
 	manager *Manager
+}
+
+func (el *Primordial) Test(t *testing.T, names ...string) (ref *Primordial) {
+	t.Cleanup(func() {
+		el.GarbageCollector(names...)
+	})
+
+	return el
 }
 
 // NetworkCreate
