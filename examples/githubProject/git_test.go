@@ -13,15 +13,40 @@ func TestLinear(t *testing.T) {
 	//Test(t)
 
 	factory.NewContainerFromGit(
-		"barco:latest",
+		"polar:latest",
 		"https://github.com/polarstreams/polar.git",
 	).
 		ReplaceBeforeBuild("Dockerfile", "Dockerfile").
-		EnvironmentVar([]string{"BARCO_DEV_MODE=true"}).
-		//PrivateRepositoryAutoConfig().
-		VulnerabilityScanner().
-		Ports("tcp", 3000, 3000).
-		Create("barco", 1).
+		EnvironmentVar(
+			[]string{
+				//"BARCO_DEV_MODE=true",
+				"POLAR_SHUTDOWN_DELAY_SECS=0",
+				"POLAR_CONSUMER_ADD_DELAY_MS=5000",
+				"POLAR_SEGMENT_FLUSH_INTERVAL_MS=500",
+				"POLAR_BROKER_NAMES=delete_polar_0,delete_polar_1,delete_polar_2",
+				"POLAR_ORDINAL=0",
+			},
+			[]string{
+				//"BARCO_DEV_MODE=true",
+				"POLAR_SHUTDOWN_DELAY_SECS=0",
+				"POLAR_CONSUMER_ADD_DELAY_MS=5000",
+				"POLAR_SEGMENT_FLUSH_INTERVAL_MS=500",
+				"POLAR_BROKER_NAMES=delete_polar_0,delete_polar_1,delete_polar_2",
+				"POLAR_ORDINAL=1",
+			},
+			[]string{
+				//"BARCO_DEV_MODE=true",
+				"POLAR_SHUTDOWN_DELAY_SECS=0",
+				"POLAR_CONSUMER_ADD_DELAY_MS=5000",
+				"POLAR_SEGMENT_FLUSH_INTERVAL_MS=500",
+				"POLAR_BROKER_NAMES=delete_polar_0,delete_polar_1,delete_polar_2",
+				"POLAR_ORDINAL=2",
+			},
+		).
+		Ports("tcp", 9250, 9250).
+		Ports("tcp", 9251, 9251).
+		Ports("tcp", 9252, 9252).
+		Create("polar", 3).
 		Start()
 
 	if !primordial.Monitor(3 * time.Minute) {

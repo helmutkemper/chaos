@@ -152,8 +152,10 @@ type containerCommon struct {
 	ChaosMaxPausedStoppedSameTime int
 	ChaosChangeIpProbability      float64
 
-	ChaosTestEnd        bool
-	VulnerabilityReport bool
+	ChaosTestEnd bool
+
+	VulnerabilityReport     bool
+	VulnerabilityReportPath string
 }
 
 type ContainerFromImage struct {
@@ -392,6 +394,24 @@ func (el *ContainerFromImage) StdinOnce(once bool) (ref *ContainerFromImage) {
 	}
 
 	el.manager.DockerSys[0].Config.StdinOnce = once
+	return el
+}
+
+// Reports
+//
+// Sets SaveStatistics(), VulnerabilityScanner() and FailFlag() functions to default values.
+//
+//	Note:
+//	  This function is called automatically by the factory
+func (el *ContainerFromImage) Reports() (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
+	el.SaveStatistics("./").
+		VulnerabilityScanner("./").
+		FailFlag("./bug", "panic:", "bug:", "error:")
+
 	return el
 }
 
@@ -678,16 +698,82 @@ func (el *ContainerFromImage) Detach() (ref *ContainerFromImage) {
 	return el
 }
 
-func (el *ContainerFromImage) Command(iCopy int, command ...string) (exitCode int, running bool, stdOutput []byte, stdError []byte, err error) {
-	return el.manager.DockerSys[iCopy].ContainerExecCommand(el.manager.Id[iCopy], command)
+// Command
+//
+// Runs a command within a specific container.
+//
+//	Input:
+//	  key: Container key defined in the Create() command, where the largest valid key equals "copies - 1".
+//	    Exemplo, Create(name, copies). Se copies = 1, só há um container criado e a chave de acesso dele é 0
+//	  command: List of commands to run inside docker.
+//	    Example: Google's osv-scanner project requires the "/root/osv-scanner" command to run inside an alpine container
+//	    Therefore, the correct way to execute the command in container 0 will be:
+//	    Command(0, "/bin/ash", "-c", "/root/osv-scanner --json -r /scan > /report/report.json")
+func (el *ContainerFromImage) Command(key int, command ...string) (exitCode int, running bool, stdOutput []byte, stdError []byte, err error) {
+	return el.manager.DockerSys[key].ContainerExecCommand(el.manager.Id[key], command)
 }
 
-func (el *ContainerFromImage) VulnerabilityScanner() (ref *ContainerFromImage) {
+// VulnerabilityScanner
+//
+// Uses google's "osv-scanner" project to look for packages containing vulnerabilities in the code under test.
+//
+//	 Example:
+//
+//			# Vulnerability Report
+//
+//			This report is based on an open database and shows known vulnerabilities. Validity: Sun Dec 18 11:09:02 2022
+//
+//			## Path
+//
+//			Path: /scan/go.mod
+//			Type: lockfile
+//
+//			### Packages
+//
+//			| Ecosystem | Package          | Version |
+//			|-----------|------------------|---------|
+//			| Go        | golang.org/x/net | 0.2.0   |
+//
+//			### Details:
+//
+//			An attacker can cause excessive memory growth in a Go server accepting HTTP/2 requests.
+//
+//			HTTP/2 server connections contain a cache of HTTP header keys sent by the client. While the total number of entries in this cache is capped, an attacker sending very large keys can cause the server to allocate approximately 64 MiB per open connection.
+//
+//			### Affected:
+//
+//			| Ecosystem | Package          |
+//			|-----------|------------------|
+//			| Go        | stdlib           |
+//			| Go        | golang.org/x/net |
+//
+//			| type   | URL                                                                                                                                                  |
+//			|--------|------------------------------------------------------------------------------------------------------------------------------------------------------|
+//			| REPORT | [https://go.dev/issue/56350](https://go.dev/issue/56350)                                                                                             |
+//			| FIX    | [https://go.dev/cl/455717](https://go.dev/cl/455717)                                                                                                 |
+//			| FIX    | [https://go.dev/cl/455635](https://go.dev/cl/455635)                                                                                                 |
+//			| WEB    | [https://groups.google.com/g/golang-announce/c/L_3rmdT0BMU/m/yZDrXjIiBQAJ](https://groups.google.com/g/golang-announce/c/L_3rmdT0BMU/m/yZDrXjIiBQAJ) |
+func (el *ContainerFromImage) VulnerabilityScanner(path string) (ref *ContainerFromImage) {
 	if monitor.Err {
 		return el
 	}
 
+	var err error
+	var fileInfo os.FileInfo
+	if fileInfo, err = os.Stat(path); err != nil {
+		if err = os.MkdirAll(path, fs.ModePerm); err != nil {
+			monitor.Err = true
+			el.manager.ErrorCh <- fmt.Errorf("container.VulnerabilityScanner().MkdirAll().error: %v", "directory not found")
+			return el
+		}
+	} else if !fileInfo.IsDir() {
+		monitor.Err = true
+		el.manager.ErrorCh <- fmt.Errorf("container.VulnerabilityScanner().error: %v", "directory not found")
+		return el
+	}
+
 	el.VulnerabilityReport = true
+	el.VulnerabilityReportPath = path
 	return el
 }
 
@@ -853,10 +939,13 @@ VOLUME /scan
 	}
 
 	reportText += "\n"
-	_ = os.WriteFile(fmt.Sprintf("./%v.md", reportName), []byte(reportText), fs.ModePerm)
+	_ = os.WriteFile(filepath.Join(el.VulnerabilityReportPath, fmt.Sprintf("report.%v.md", reportName)), []byte(reportText), fs.ModePerm)
 	return el
 }
 
+// Stop
+//
+// Stops all containers controlled by the control object
 func (el *ContainerFromImage) Stop() (ref *ContainerFromImage) {
 	if monitor.Err {
 		return el
@@ -895,6 +984,9 @@ func (el *ContainerFromImage) containerWaitStatusNotRunning() (ref *ContainerFro
 	return el
 }
 
+// Remove
+//
+// Removes all containers controlled by the control object
 func (el *ContainerFromImage) Remove() (ref *ContainerFromImage) {
 	if monitor.Err {
 		return el
@@ -916,7 +1008,7 @@ func (el *ContainerFromImage) Remove() (ref *ContainerFromImage) {
 
 // Start
 //
-// Start the container after build
+// Initializes all containers controlled by the control object
 func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 	if monitor.Err {
 		return el
