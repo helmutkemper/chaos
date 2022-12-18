@@ -3,6 +3,7 @@ package manager
 import (
 	"bytes"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/docker/docker/api/types"
@@ -36,8 +37,67 @@ const (
 	kSrc = 1
 )
 
+type reportData struct {
+	Results []struct {
+		Source struct {
+			Path string `json:"path"`
+			Type string `json:"type"`
+		} `json:"source"`
+		Packages []struct {
+			Package struct {
+				Name      string `json:"name"`
+				Version   string `json:"version"`
+				Ecosystem string `json:"ecosystem"`
+			} `json:"package"`
+			Vulnerabilities []struct {
+				SchemaVersion string    `json:"schema_version"`
+				Id            string    `json:"id"`
+				Modified      time.Time `json:"modified"`
+				Published     time.Time `json:"published"`
+				Aliases       []string  `json:"aliases"`
+				Summary       string    `json:"summary"`
+				Details       string    `json:"details"`
+				Affected      []struct {
+					Package struct {
+						Ecosystem string `json:"ecosystem"`
+						Name      string `json:"name"`
+						Purl      string `json:"purl"`
+					} `json:"package"`
+					Ranges []struct {
+						Type   string `json:"type"`
+						Events []struct {
+							Introduced string `json:"introduced,omitempty"`
+							Fixed      string `json:"fixed,omitempty"`
+						} `json:"events"`
+					} `json:"ranges"`
+					DatabaseSpecific struct {
+						Source string `json:"source"`
+						Url    string `json:"url"`
+					} `json:"database_specific"`
+					EcosystemSpecific struct {
+						Imports []struct {
+							Path    string   `json:"path"`
+							Symbols []string `json:"symbols"`
+						} `json:"imports"`
+					} `json:"ecosystem_specific"`
+				} `json:"affected"`
+				References []struct {
+					Type string `json:"type"`
+					Url  string `json:"url"`
+				} `json:"references"`
+			} `json:"vulnerabilities"`
+			Groups []struct {
+				Ids []string `json:"ids"`
+			} `json:"groups"`
+		} `json:"packages"`
+	} `json:"results"`
+}
+
 type containerCommon struct {
 	IPV4Address []string
+
+	// detach from monitor
+	detach bool
 
 	//port inside container and host computer port
 	portsContainer []nat.Port
@@ -92,7 +152,8 @@ type containerCommon struct {
 	ChaosMaxPausedStoppedSameTime int
 	ChaosChangeIpProbability      float64
 
-	ChaosTestEnd bool
+	ChaosTestEnd        bool
+	VulnerabilityReport bool
 }
 
 type ContainerFromImage struct {
@@ -609,6 +670,250 @@ func (el *ContainerFromImage) FailFlag(path string, flags ...string) (ref *Conta
 	return el
 }
 
+// Detach
+//
+// Detach container from monitor
+func (el *ContainerFromImage) Detach() (ref *ContainerFromImage) {
+	el.detach = true
+	return el
+}
+
+func (el *ContainerFromImage) Command(iCopy int, command ...string) (exitCode int, running bool, stdOutput []byte, stdError []byte, err error) {
+	return el.manager.DockerSys[iCopy].ContainerExecCommand(el.manager.Id[iCopy], command)
+}
+
+func (el *ContainerFromImage) VulnerabilityScanner() (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
+	el.VulnerabilityReport = true
+	return el
+}
+
+func (el *ContainerFromImage) vulnerabilityScannerMaker(reportName, tmpDirProject, imageName string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
+	var dockerfileText = `# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+FROM golang:alpine
+
+RUN mkdir /scan
+RUN mkdir /src
+WORKDIR /src
+
+COPY ./go.mod /src/go.mod
+COPY ./go.sum /src/go.sum
+RUN go mod download
+
+COPY ./ /src/
+RUN go build -o osv-scanner ./cmd/osv-scanner/
+
+FROM alpine:latest
+RUN apk --no-cache add \
+    ca-certificates \
+    docker \
+    openrc \
+    git
+
+# Allow git to run on mounted directories
+RUN git config --global --add safe.directory '*'
+
+WORKDIR /root/
+COPY --from=0 /src/osv-scanner ./
+
+VOLUME /scan
+
+`
+
+	if imageName == "" {
+		dockerfileText += fmt.Sprintf("CMD /root/osv-scanner --json -r /scan > /report/report.json\n")
+	} else {
+		dockerfileText += fmt.Sprintf("CMD /root/osv-scanner --json --docker %v:latest > /report/report.json\n", imageName)
+	}
+
+	var err error
+	var tmpDirReport string
+	tmpDirReport, err = os.MkdirTemp("", "chaos__")
+	if err != nil {
+		err = fmt.Errorf("container.makeTmpDir().error: %v", err)
+		return
+	}
+
+	defer func() {
+		_ = os.RemoveAll(tmpDirReport)
+	}()
+
+	pathDocker := filepath.Join(tmpDirReport, "dockerReplace")
+	err = os.MkdirAll(pathDocker, fs.ModePerm)
+	//todo: error
+	err = os.WriteFile(filepath.Join(pathDocker, "Dockerfile"), []byte(dockerfileText), fs.ModePerm)
+	//todo: error
+
+	manager := new(Manager)
+	manager.New()
+
+	container := new(ContainerFromImage)
+	container.manager = manager
+	container.gitUrl = "https://github.com/helmutkemper/osv-scanner.git"
+	container.imageName = "delete_osv:latest"
+	container.command = "fromServer" //fixme: contante
+	container.ReplaceBeforeBuild("Dockerfile", filepath.Join(pathDocker, "Dockerfile")).
+		Detach().
+		Volumes("/scan", tmpDirProject).
+		Volumes("/report", tmpDirReport).
+		Create("osv", 1).
+		Start().
+		containerWaitStatusNotRunning().
+		Remove()
+
+	var report []byte
+	report, err = os.ReadFile(filepath.Join(tmpDirReport, "report.json"))
+	if err != nil {
+		err = fmt.Errorf("container.imageBuild().ReadFile().error: %v", err)
+		return
+	}
+
+	var reportSt reportData
+	err = json.Unmarshal(report, &reportSt)
+	if err != nil {
+		err = fmt.Errorf("container.imageBuild().Unmarshal().error: %v", err)
+		return
+	}
+
+	reportText := "# Vulnerability Report\n\n"
+	reportText += fmt.Sprintf("This report is based on an open database and shows known vulnerabilities. Validity: %v\n\n", time.Now().Format(time.ANSIC))
+
+	if len(reportSt.Results) == 0 {
+		reportText += fmt.Sprintf("No known vulnerabilities found\n\n")
+	}
+
+	for kResults := range reportSt.Results {
+		for kPackages := range reportSt.Results[kResults].Packages {
+			reportText += fmt.Sprintf("## Path\n\n")
+			reportText += fmt.Sprintf("Path: %v\n", reportSt.Results[kResults].Source.Path)
+			reportText += fmt.Sprintf("Type: %v\n\n", reportSt.Results[kResults].Source.Type)
+
+			reportText += fmt.Sprintf("### Packages\n\n")
+			reportText += fmt.Sprintf("| Ecosystem   | Package           | Version      |\n")
+			reportText += fmt.Sprintf("|-------------|-------------------|--------------|\n")
+			reportText += fmt.Sprintf("| %v  ", reportSt.Results[kResults].Packages[kPackages].Package.Ecosystem)
+			reportText += fmt.Sprintf("| %v  ", reportSt.Results[kResults].Packages[kPackages].Package.Name)
+			reportText += fmt.Sprintf("| %v  |\n", reportSt.Results[kResults].Packages[kPackages].Package.Version)
+
+			for kVulnerabilities := range reportSt.Results[kResults].Packages[kPackages].Vulnerabilities {
+				reportText += fmt.Sprintf("\n")
+				var summary = reportSt.Results[kResults].Packages[kPackages].Vulnerabilities[kVulnerabilities].Summary
+				var details = reportSt.Results[kResults].Packages[kPackages].Vulnerabilities[kVulnerabilities].Details
+
+				if summary != "" {
+					reportText += fmt.Sprintf("### Summary:\n\n%v\n\n", summary)
+				}
+
+				if details != "" {
+					reportText += fmt.Sprintf("### Details:\n\n%v\n\n", details)
+				}
+
+				reportText += fmt.Sprintf("### Affected:\n\n")
+				reportText += fmt.Sprintf("| Ecosystem   | Package           |\n")
+				reportText += fmt.Sprintf("|-------------|-------------------|\n")
+
+				for kAffected := range reportSt.Results[kResults].Packages[kPackages].Vulnerabilities[kVulnerabilities].Affected {
+					reportText += fmt.Sprintf("| %v   ", reportSt.Results[kResults].Packages[kPackages].Vulnerabilities[kVulnerabilities].Affected[kAffected].Package.Ecosystem)
+					reportText += fmt.Sprintf("| %v  |\n", reportSt.Results[kResults].Packages[kPackages].Vulnerabilities[kVulnerabilities].Affected[kAffected].Package.Name)
+					//reportText += fmt.Sprintf("%v\n", reportSt.Results[kResults].Packages[kPackages].Vulnerabilities[kVulnerabilities].Affected[kAffected].Package.Purl)
+				}
+
+				reportText += fmt.Sprintf("\n")
+				reportText += fmt.Sprintf("| type   | URL           |\n")
+				reportText += fmt.Sprintf("|--------|---------------|\n")
+
+				for kReference := range reportSt.Results[kResults].Packages[kPackages].Vulnerabilities[kVulnerabilities].References {
+					var problemType = reportSt.Results[kResults].Packages[kPackages].Vulnerabilities[kVulnerabilities].References[kReference].Type
+					var problemUrl = reportSt.Results[kResults].Packages[kPackages].Vulnerabilities[kVulnerabilities].References[kReference].Url
+					reportText += fmt.Sprintf("| %v |", problemType)
+					reportText += fmt.Sprintf(" [%v](%v)  |\n", problemUrl, problemUrl)
+				}
+			}
+		}
+	}
+
+	reportText += "\n"
+	_ = os.WriteFile(fmt.Sprintf("./%v.md", reportName), []byte(reportText), fs.ModePerm)
+	return el
+}
+
+func (el *ContainerFromImage) Stop() (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
+	var err error
+
+	for i := 0; i != el.copies; i += 1 {
+		err = el.manager.DockerSys[i].ContainerStop(el.manager.Id[i])
+		if err != nil {
+			monitor.Err = true
+			el.manager.ErrorCh <- fmt.Errorf("container[%v].Stop().ContainerStop().error: %v", i, err)
+			return el
+		}
+	}
+
+	return el
+}
+
+func (el *ContainerFromImage) containerWaitStatusNotRunning() (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
+	var err error
+
+	for i := 0; i != el.copies; i += 1 {
+		err = el.manager.DockerSys[i].ContainerWaitStatusNotRunning(el.manager.Id[i])
+		if err != nil {
+			monitor.Err = true
+			el.manager.ErrorCh <- fmt.Errorf("container[%v].containerWaitStatusNotRunning().error: %v", i, err)
+			return el
+		}
+	}
+
+	return el
+}
+
+func (el *ContainerFromImage) Remove() (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
+	var err error
+
+	for i := 0; i != el.copies; i += 1 {
+		err = el.manager.DockerSys[i].ContainerRemove(el.manager.Id[i], true, false, true)
+		if err != nil {
+			monitor.Err = true
+			el.manager.ErrorCh <- fmt.Errorf("container[%v].Remove().ContainerRemove().error: %v", i, err)
+			return el
+		}
+	}
+
+	return el
+}
+
 // Start
 //
 // Start the container after build
@@ -626,6 +931,10 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerStart().error: %v", i, err)
 			return el
 		}
+	}
+
+	if el.detach == true {
+		return el
 	}
 
 	var inspect types.ContainerJSON
@@ -1214,6 +1523,10 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 		return el
 	}
 
+	if el.imageCacheName == "" {
+		el.imageCacheName = "cache:latest"
+	}
+
 	if el.autoDockerfile == nil {
 		el.autoDockerfile = new(dockerfileGolang.DockerfileGolang)
 	}
@@ -1232,10 +1545,26 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 
 	var config = el.manager.DockerSys[0].GetConfig()
 
-	err = el.imageBuild()
+	if el.enableCache == true {
+		_, err = el.manager.DockerSys[0].ImageFindIdByName(el.imageCacheName)
+		if err != nil && err.Error() == "image name not found" {
+			err = el.imageBuild(el.imageCacheName)
+			if err != nil {
+				monitor.Err = true
+				el.manager.ErrorCh <- fmt.Errorf("container.Create().imageBuild(%v).error: %v", el.imageCacheName, err)
+				return el
+			}
+		} else if err != nil {
+			monitor.Err = true
+			el.manager.ErrorCh <- fmt.Errorf("container.Create().ImageFindIdByName().error: %v", err)
+			return el
+		}
+	}
+
+	err = el.imageBuild(el.imageName)
 	if err != nil {
 		monitor.Err = true
-		el.manager.ErrorCh <- fmt.Errorf("container.Create().imageBuild().error: %v", err)
+		el.manager.ErrorCh <- fmt.Errorf("container.Create().imageBuild(%v).error: %v", el.imageName, err)
 		return el
 	}
 
@@ -1351,7 +1680,9 @@ func (el *ContainerFromImage) mapContainerPorts(iCopy int) (portConfig nat.PortM
 // imageBuild
 //
 // project image build
-func (el *ContainerFromImage) imageBuild() (err error) {
+func (el *ContainerFromImage) imageBuild(imageName string) (err error) {
+	var tmpDir string
+
 	switch el.command {
 	case "fromServer":
 		if el.gitUrl == "" {
@@ -1363,7 +1694,6 @@ func (el *ContainerFromImage) imageBuild() (err error) {
 			return
 		}
 
-		var tmpDir string
 		var publicKeys *sshGit.PublicKeys
 		var gitCloneConfig *git.CloneOptions
 		publicKeys, err = el.gitMakePublicSshKey()
@@ -1427,6 +1757,11 @@ func (el *ContainerFromImage) imageBuild() (err error) {
 			return
 		}
 
+		// fixme: experimental
+		if el.VulnerabilityReport == true {
+			el.vulnerabilityScannerMaker(imageName, tmpDir, "")
+		}
+
 		el.buildPath = tmpDir
 
 		var volumes = make([]mount.Mount, 0)
@@ -1443,7 +1778,7 @@ func (el *ContainerFromImage) imageBuild() (err error) {
 
 		el.imageId, err = el.manager.DockerSys[0].ImageBuildFromFolder(
 			el.buildPath,
-			el.imageName,
+			imageName,
 			[]string{},
 			el.manager.ImageBuildOptions,
 			changePointer,
@@ -1471,7 +1806,6 @@ func (el *ContainerFromImage) imageBuild() (err error) {
 			return
 		}
 
-		var tmpDir string
 		tmpDir, err = el.copyBuildPathToTmpDir()
 		if err != nil {
 			err = fmt.Errorf("container.imageBuild().copyBuildPathToTmpDir().error: %v", err)
@@ -1485,6 +1819,11 @@ func (el *ContainerFromImage) imageBuild() (err error) {
 		if err != nil {
 			err = fmt.Errorf("container.imageBuild().replaceFilesBeforeBuild().error: %v", err)
 			return
+		}
+
+		// fixme: experimental
+		if el.VulnerabilityReport == true {
+			el.vulnerabilityScannerMaker(imageName, tmpDir, "")
 		}
 
 		el.buildPath = tmpDir
@@ -1503,7 +1842,7 @@ func (el *ContainerFromImage) imageBuild() (err error) {
 
 		el.imageId, err = el.manager.DockerSys[0].ImageBuildFromFolder(
 			el.buildPath,
-			el.imageName,
+			imageName,
 			[]string{},
 			el.manager.ImageBuildOptions,
 			changePointer,
@@ -1526,6 +1865,11 @@ func (el *ContainerFromImage) imageBuild() (err error) {
 		if err = el.imagePull(); err != nil {
 			err = fmt.Errorf("container.imageBuild().imagePull().error: %v", err)
 			return
+		}
+
+		// fixme: experimental
+		if el.VulnerabilityReport == true {
+			el.vulnerabilityScannerMaker(imageName, tmpDir, el.imageName)
 		}
 	}
 
@@ -3416,6 +3760,16 @@ func (el *ContainerFromImage) GitPathPrivateRepository(value string) (ref *Conta
 	}
 
 	el.gitPathPrivateRepository = value
+	return el
+}
+
+func (el *ContainerFromImage) ImageCacheName(name string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+	//fixme:ferificar flag
+	el.enableCache = true
+	el.imageCacheName = name
 	return el
 }
 
