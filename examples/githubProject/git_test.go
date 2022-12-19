@@ -12,16 +12,18 @@ import (
 func TestLinear(t *testing.T) {
 	var err error
 
+	// clear data after test
 	t.Cleanup(func() {
 		factory.NewPrimordial().GarbageCollector()
 		_ = os.Remove("./data/ignore.dataSent.txt")
 		_ = os.Remove("./data/ignore.dataReceived.txt")
 	})
 
+	// create a network
 	primordial := factory.NewPrimordial().
-		NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1") //.
-	//Test(t)
+		NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1")
 
+	// cloning polar project
 	factory.NewContainerFromGit(
 		"polar:latest",
 		"https://github.com/polarstreams/polar.git",
@@ -59,6 +61,7 @@ func TestLinear(t *testing.T) {
 		Create("polar", 3).
 		Start()
 
+	// create a polar consuming container
 	consumer := factory.NewContainerFromFolder(
 		"consumer",
 		"./consumer",
@@ -68,6 +71,7 @@ func TestLinear(t *testing.T) {
 		Create("consumer", 1).
 		Start()
 
+	// create a polar producer container
 	factory.NewContainerFromFolder(
 		"producer",
 		"./producer",
@@ -77,13 +81,16 @@ func TestLinear(t *testing.T) {
 		Create("producer", 1).
 		Start()
 
+	// define a test timeout
 	if !primordial.Monitor(2 * time.Minute) {
 		t.Fail()
 	}
 
+	// write this file, indicate test end to producer container
 	_ = os.WriteFile("./data/ignore.end.empty", nil, fs.ModePerm)
 	consumer.WaitStatusNotRunning()
 
+	// test data integrity
 	var data []byte
 	data, err = os.ReadFile("./data/ignore.dataSent.txt")
 	if err != nil {
