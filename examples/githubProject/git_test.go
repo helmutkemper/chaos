@@ -58,6 +58,7 @@ func TestLinear(t *testing.T) {
 		Ports("tcp", 9250, 9250).
 		Ports("tcp", 9251, 9251).
 		Ports("tcp", 9252, 9252).
+		EnableChaos(1, 1, 1, 0.0).
 		Create("polar", 3).
 		Start()
 
@@ -82,7 +83,7 @@ func TestLinear(t *testing.T) {
 		Start()
 
 	// define a test timeout
-	if !primordial.Monitor(2 * time.Minute) {
+	if !primordial.Monitor(5 * time.Minute) {
 		t.Fail()
 	}
 
@@ -104,8 +105,8 @@ func TestLinear(t *testing.T) {
 		t.Logf("read receiceved data log error: %v", err)
 		t.FailNow()
 	}
-
 	linesReceived := bytes.Split(data, []byte("\n"))
+
 	for kSent := range linesSent {
 		var pass = false
 
@@ -117,8 +118,8 @@ func TestLinear(t *testing.T) {
 		}
 
 		if !pass {
-			t.Log("found an inconsistency in the shared data")
-			t.FailNow()
+			t.Logf("%s", linesSent[kSent])
+			t.Fail()
 		}
 	}
 }
