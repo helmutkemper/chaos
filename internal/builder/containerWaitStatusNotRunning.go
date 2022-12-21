@@ -1,5 +1,10 @@
 package builder
 
+import (
+	"context"
+	"time"
+)
+
 // ContainerWaitStatusNotRunning (English): Waits until a container is in "not-running"
 // status
 //
@@ -11,11 +16,15 @@ package builder
 //	id: string container id
 func (el *DockerSystem) ContainerWaitStatusNotRunning(
 	id string,
+	timeout time.Duration,
 ) (
 	err error,
 ) {
 
-	wOk, wErr := el.cli.ContainerWait(el.ctx, id, "not-running")
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	wOk, wErr := el.cli.ContainerWait(ctx, id, "not-running")
+	defer cancel()
+
 	select {
 	case <-wOk:
 	case err = <-wErr:

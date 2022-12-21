@@ -12,11 +12,17 @@ import (
 func TestLinear(t *testing.T) {
 	var err error
 
+	_ = os.Remove("./data/ignore.dataSent.txt")
+	_ = os.Remove("./data/ignore.dataReceived.txt")
+	_ = os.Remove("./data/ignore.end.empty")
+	factory.NewPrimordial().GarbageCollector()
+
 	// clear data after test
 	t.Cleanup(func() {
-		factory.NewPrimordial().GarbageCollector()
+		//factory.NewPrimordial().GarbageCollector()
 		_ = os.Remove("./data/ignore.dataSent.txt")
 		_ = os.Remove("./data/ignore.dataReceived.txt")
+		_ = os.Remove("./data/ignore.end.empty")
 	})
 
 	// create a network
@@ -83,13 +89,20 @@ func TestLinear(t *testing.T) {
 		Start()
 
 	// define a test timeout
-	if !primordial.Monitor(5 * time.Minute) {
-		t.Fail()
+	if !primordial.Monitor(15 * time.Minute) {
+		t.FailNow()
 	}
 
 	// write this file, indicate test end to producer container
-	_ = os.WriteFile("./data/ignore.end.empty", nil, fs.ModePerm)
-	consumer.WaitStatusNotRunning()
+
+	err = os.WriteFile("./data/ignore.end.empty", nil, fs.ModePerm)
+	if err != nil {
+		t.Logf("write end simulation error: %v", err)
+		t.FailNow()
+	}
+
+	t.Logf("end simulation signal sent")
+	consumer.WaitStatusNotRunning(2 * time.Minute)
 
 	// test data integrity
 	var data []byte

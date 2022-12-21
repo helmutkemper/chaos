@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/polarstreams/go-client"
 	"io/fs"
+	"log"
 	"os"
 	"time"
 
@@ -21,7 +22,7 @@ type Order struct {
 
 func (el *Order) NewFake() {
 	el.ID = gofakeit.UUID()
-	el.Item = gofakeit.BeerAlcohol()
+	el.Item = gofakeit.BeerName()
 	el.Price = gofakeit.Price(0.99, 10.99)
 	el.EMail = gofakeit.Email()
 }
@@ -36,7 +37,7 @@ func main() {
 
 func Event() (err error) {
 	var producer polar.Producer
-	producer, err = NewProducer("polar://delete_polar_0")
+	producer, err = NewProducer("polar://delete_polar_0#polar://delete_polar_1#polar://delete_polar_2")
 	if err != nil {
 		return
 	}
@@ -67,8 +68,9 @@ func Event() (err error) {
 
 		_, err = os.ReadFile("/data/ignore.end.empty")
 		if err == nil {
-			_ = os.Remove("/data/ignore.end.empty")
+			log.Print("end of simulation sent")
 			_ = SendData([]byte("{\"end\":\"end\"}"), producer)
+			time.Sleep(1 * time.Second)
 			return
 		}
 	}

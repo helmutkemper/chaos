@@ -18,7 +18,7 @@ type Order struct {
 func main() {
 	var err error
 	var consumer polar.Consumer
-	consumer, err = NewConsumer("polar://delete_polar_0")
+	consumer, err = NewConsumer("polar://delete_polar_0#polar://delete_polar_1#polar://delete_polar_2")
 	if err != nil {
 		panic(err)
 	}

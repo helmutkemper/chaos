@@ -864,7 +864,7 @@ VOLUME /scan
 		Volumes("/report", tmpDirReport).
 		Create("osv", 1).
 		Start().
-		WaitStatusNotRunning().
+		WaitStatusNotRunning(10 * time.Second).
 		Remove()
 
 	var report []byte
@@ -965,7 +965,7 @@ func (el *ContainerFromImage) Stop() (ref *ContainerFromImage) {
 	return el
 }
 
-func (el *ContainerFromImage) WaitStatusNotRunning() (ref *ContainerFromImage) {
+func (el *ContainerFromImage) WaitStatusNotRunning(timeout time.Duration) (ref *ContainerFromImage) {
 	if monitor.Err {
 		return el
 	}
@@ -973,7 +973,7 @@ func (el *ContainerFromImage) WaitStatusNotRunning() (ref *ContainerFromImage) {
 	var err error
 
 	for i := 0; i != el.copies; i += 1 {
-		err = el.manager.DockerSys[i].ContainerWaitStatusNotRunning(el.manager.Id[i])
+		err = el.manager.DockerSys[i].ContainerWaitStatusNotRunning(el.manager.Id[i], timeout)
 		if err != nil {
 			monitor.Err = true
 			el.manager.ErrorCh <- fmt.Errorf("container[%v].containerWaitStatusNotRunning().error: %v", i, err)
@@ -1055,6 +1055,7 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 
 func (el *ContainerFromImage) End() {
 	el.ChaosTestEnd = true
+	el.failToLog()
 
 	if el.ChaosEnabled == false {
 		el.manager.DoneCh <- struct{}{}
@@ -1190,19 +1191,68 @@ func (el *ContainerFromImage) chaosMountActionsList() {
 	var stopped = 0
 	var paused = 0
 	var doNotting = 0
+	var affected = 0
 
 	for iCopy := 0; iCopy != el.copies; iCopy += 1 {
 		switch el.manager.Chaos[iCopy].Type {
 		case "stop":
 			stopped += 1
+			affected += 1
 		case "pause":
 			paused += 1
+			affected += 1
 		case "doNotting":
 			doNotting += 1
+			affected += 1
 		}
 	}
 
-	for iCopy := 0; iCopy != el.copies; iCopy += 1 {
+	for {
+		if affected >= el.copies {
+			return
+		}
+
+		var iCopy = rand.Intn(el.copies)
+		if el.manager.Chaos[iCopy].Type != "" {
+			continue
+		}
+
+		if el.ChaosMaxPausedStoppedSameTime != 0 && el.ChaosMaxPausedStoppedSameTime <= stopped+paused {
+			return
+		}
+
+		action := rand.Intn(2) //todo: melhorar
+		switch action {
+
+		case 0: //stop
+			if el.ChaosMaxStopped != 0 && el.ChaosMaxStopped <= stopped {
+				continue
+			}
+
+			stopped += 1
+			affected += 1
+			el.queueContainerStop(iCopy)
+
+		case 1: //pause
+			if el.ChaosMaxPaused != 0 && el.ChaosMaxPaused <= paused {
+				continue
+			}
+
+			paused += 1
+			affected += 1
+			el.queueContainerPause(iCopy)
+
+		default: //do notting
+			doNotting += 1
+			affected += 1
+			el.queueContainerDoNotting(iCopy)
+		}
+	}
+
+	return
+	var iCopy = rand.Intn(el.copies - 1)
+
+	for iCopy = 0; iCopy != el.copies; iCopy += 1 {
 
 		if el.manager.Chaos[iCopy].Type != "" {
 			continue
@@ -1295,36 +1345,40 @@ func (el *ContainerFromImage) chaosDoNotting(_ string) (err error) {
 	return
 }
 
-// failFlagThread
-//
-// ticker that monitors the standard output of the container looking for test failure flags
-func (el *ContainerFromImage) failFlagThread() {
+func (el *ContainerFromImage) failToLog() {
 	var err error
 	var logs []byte
 	var lineList [][]byte
 	var found bool
 	var line []byte
 
+	for i := 0; i != el.copies; i += 1 {
+
+		logs, err = el.manager.DockerSys[i].ContainerLogs(el.manager.Id[i])
+		if err != nil {
+			monitor.Err = true
+			el.manager.ErrorCh <- fmt.Errorf("container[%v].failFlagThread().ContainerLogs().error: %v", i, err)
+			return
+		}
+
+		lineList = el.logsCleaner(logs, i)
+		if line, found = el.logsSearchAndReplaceIntoText(i, &logs, lineList, el.failPath, el.failFlag); found {
+			el.manager.FailCh <- string(line)
+		}
+
+	}
+}
+
+// failFlagThread
+//
+// ticker that monitors the standard output of the container looking for test failure flags
+func (el *ContainerFromImage) failFlagThread() {
 	el.manager.TickerFail = time.NewTicker(10 * time.Second)
 	go func() {
 		for {
 			select {
 			case <-el.manager.TickerFail.C:
-				for i := 0; i != el.copies; i += 1 {
-
-					logs, err = el.manager.DockerSys[i].ContainerLogs(el.manager.Id[i])
-					if err != nil {
-						monitor.Err = true
-						el.manager.ErrorCh <- fmt.Errorf("container[%v].failFlagThread().ContainerLogs().error: %v", i, err)
-						return
-					}
-
-					lineList = el.logsCleaner(logs, i)
-					if line, found = el.logsSearchAndReplaceIntoText(i, &logs, lineList, el.failPath, el.failFlag); found {
-						el.manager.FailCh <- string(line)
-					}
-
-				}
+				el.failToLog()
 			}
 		}
 	}()
@@ -1674,7 +1728,7 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 		}
 
 		// get the next ip address from network
-		if networkManagerGlobal != nil {
+		if networkManagerGlobal != nil && !el.detach {
 			ipAddress, netConfig, err = networkManagerGlobal.generator.GetNext()
 			if err != nil {
 				monitor.Err = true
