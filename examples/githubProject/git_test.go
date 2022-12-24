@@ -19,7 +19,7 @@ func TestLinear(t *testing.T) {
 
 	// clear data after test
 	t.Cleanup(func() {
-		//factory.NewPrimordial().GarbageCollector()
+		factory.NewPrimordial().GarbageCollector()
 		_ = os.Remove("./data/ignore.dataSent.txt")
 		_ = os.Remove("./data/ignore.dataReceived.txt")
 		_ = os.Remove("./data/ignore.end.empty")
@@ -41,7 +41,7 @@ func TestLinear(t *testing.T) {
 				"POLAR_SHUTDOWN_DELAY_SECS=0",
 				"POLAR_CONSUMER_ADD_DELAY_MS=5000",
 				"POLAR_SEGMENT_FLUSH_INTERVAL_MS=500",
-				"POLAR_BROKER_NAMES=delete_polar_0,delete_polar_1,delete_polar_2",
+				"POLAR_BROKER_NAMES=delete-polar-0,delete-polar-1,delete-polar-2",
 				"POLAR_ORDINAL=0",
 			},
 			[]string{
@@ -49,7 +49,7 @@ func TestLinear(t *testing.T) {
 				"POLAR_SHUTDOWN_DELAY_SECS=0",
 				"POLAR_CONSUMER_ADD_DELAY_MS=5000",
 				"POLAR_SEGMENT_FLUSH_INTERVAL_MS=500",
-				"POLAR_BROKER_NAMES=delete_polar_0,delete_polar_1,delete_polar_2",
+				"POLAR_BROKER_NAMES=delete-polar-0,delete-polar-1,delete-polar-2",
 				"POLAR_ORDINAL=1",
 			},
 			[]string{
@@ -57,14 +57,14 @@ func TestLinear(t *testing.T) {
 				"POLAR_SHUTDOWN_DELAY_SECS=0",
 				"POLAR_CONSUMER_ADD_DELAY_MS=5000",
 				"POLAR_SEGMENT_FLUSH_INTERVAL_MS=500",
-				"POLAR_BROKER_NAMES=delete_polar_0,delete_polar_1,delete_polar_2",
+				"POLAR_BROKER_NAMES=delete-polar-0,delete-polar-1,delete-polar-2",
 				"POLAR_ORDINAL=2",
 			},
 		).
 		Ports("tcp", 9250, 9250).
 		Ports("tcp", 9251, 9251).
 		Ports("tcp", 9252, 9252).
-		EnableChaos(1, 1, 1, 0.0).
+		EnableChaos(1, 1, 1).
 		Create("polar", 3).
 		Start()
 

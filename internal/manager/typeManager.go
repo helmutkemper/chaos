@@ -117,7 +117,7 @@ func (el *Manager) Primordial() (primordial *Primordial) {
 //	Notes:
 //	  * If there is already a network with the same name and the same configuration, nothing will be done;
 //	  * If a network with the same name and different configuration already exists, the network will be deleted, and a new network created.
-func (el *Manager) networkCreate(name, subnet, gateway string) (err error) {
+func (el *Manager) networkCreate(name, subnet, gateway string) (networkId string, err error) {
 	el.network = new(dockerNetwork)
 	el.network.networkName = name
 
@@ -150,9 +150,14 @@ func (el *Manager) networkCreate(name, subnet, gateway string) (err error) {
 		}
 	}
 
-	el.network.networkID, el.network.generator, err = el.DockerSys[0].NetworkCreate(name, builder.KNetworkDriveBridge, "local", subnet, gateway)
+	if el.network.networkID, el.network.generator, err = el.DockerSys[0].NetworkCreate(name, builder.KNetworkDriveBridge, "local", subnet, gateway); err != nil {
+		err = fmt.Errorf("network.NetworkCreate().NetworkCreate().error: %v", err)
+		return
+	}
 
 	networkManagerGlobal = el.network
+
+	networkId = el.network.networkID
 	return
 }
 

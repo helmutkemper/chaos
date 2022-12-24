@@ -42,7 +42,7 @@ func (el *Primordial) NetworkCreate(name, subnet, gateway string) (ref *Primordi
 		name = "delete_" + name
 	}
 
-	if err = el.manager.networkCreate(name, subnet, gateway); err != nil {
+	if _, err = el.manager.networkCreate(name, subnet, gateway); err != nil {
 		el.manager.ErrorCh <- fmt.Errorf("primordial.NetworkCreate().error: %v", err)
 		return el
 	}

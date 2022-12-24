@@ -98,7 +98,6 @@ func (el *DockerSystem) ContainerCreateWithConfig(
 	}
 
 	el.ContainerName = containerName
-
 	resp, err = el.cli.ContainerCreate(
 		el.ctx,
 		configuration,
@@ -107,7 +106,7 @@ func (el *DockerSystem) ContainerCreateWithConfig(
 			RestartPolicy: container.RestartPolicy{
 				Name: restartPolicy.String(),
 			},
-			Resources: container.Resources{},
+			Resources: container.Resources{}, //fixme: rever isto
 			Mounts:    mountVolumes,
 		},
 		containerNetwork,
