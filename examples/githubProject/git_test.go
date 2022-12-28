@@ -41,7 +41,7 @@ func TestLinear(t *testing.T) {
 				"POLAR_SHUTDOWN_DELAY_SECS=0",
 				"POLAR_CONSUMER_ADD_DELAY_MS=5000",
 				"POLAR_SEGMENT_FLUSH_INTERVAL_MS=500",
-				"POLAR_BROKER_NAMES=delete-polar-0,delete-polar-1,delete-polar-2",
+				"POLAR_BROKER_NAMES=delete_polar_0,delete_polar_1,delete_polar_2",
 				"POLAR_ORDINAL=0",
 			},
 			[]string{
@@ -49,7 +49,7 @@ func TestLinear(t *testing.T) {
 				"POLAR_SHUTDOWN_DELAY_SECS=0",
 				"POLAR_CONSUMER_ADD_DELAY_MS=5000",
 				"POLAR_SEGMENT_FLUSH_INTERVAL_MS=500",
-				"POLAR_BROKER_NAMES=delete-polar-0,delete-polar-1,delete-polar-2",
+				"POLAR_BROKER_NAMES=delete_polar_0,delete_polar_1,delete_polar_2",
 				"POLAR_ORDINAL=1",
 			},
 			[]string{
@@ -57,7 +57,7 @@ func TestLinear(t *testing.T) {
 				"POLAR_SHUTDOWN_DELAY_SECS=0",
 				"POLAR_CONSUMER_ADD_DELAY_MS=5000",
 				"POLAR_SEGMENT_FLUSH_INTERVAL_MS=500",
-				"POLAR_BROKER_NAMES=delete-polar-0,delete-polar-1,delete-polar-2",
+				"POLAR_BROKER_NAMES=delete_polar_0,delete_polar_1,delete_polar_2",
 				"POLAR_ORDINAL=2",
 			},
 		).
