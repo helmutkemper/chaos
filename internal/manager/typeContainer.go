@@ -97,7 +97,8 @@ type containerCommon struct {
 	IPV4Address []string
 
 	// detach from monitor
-	detach bool
+	detach        bool
+	detachMonitor bool
 
 	//port inside container and host computer port
 	portsContainer []nat.Port
@@ -691,9 +692,17 @@ func (el *ContainerFromImage) FailFlag(path string, flags ...string) (ref *Conta
 
 // Detach
 //
-// Detach container from monitor
+// Detach container from monitor and network
 func (el *ContainerFromImage) Detach() (ref *ContainerFromImage) {
 	el.detach = true
+	return el
+}
+
+// DetachMonitor
+//
+// Detach container from monitor
+func (el *ContainerFromImage) DetachMonitor() (ref *ContainerFromImage) {
+	el.detachMonitor = true
 	return el
 }
 
@@ -1024,7 +1033,7 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 		}
 	}
 
-	if el.detach == true {
+	if el.detach || el.detachMonitor == true {
 		return el
 	}
 
@@ -1755,9 +1764,11 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 		// create the container, link container and network, but, don't start the container
 		var warnings []string
 		var id string
+		var iCopyString = strconv.FormatInt(int64(iCopy), 10)
+		var containerNameFormatted = containerName + "_" + iCopyString
 		id, warnings, err = el.manager.DockerSys[iCopy].ContainerCreateWithConfig(
 			config,
-			containerName+"_"+strconv.FormatInt(int64(iCopy), 10),
+			containerNameFormatted,
 			builder.KRestartPolicyNo,
 			portConfig,
 			volumes,
@@ -1768,6 +1779,8 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 			el.manager.ErrorCh <- fmt.Errorf("container[%v].Create().ContainerCreateWithConfig().error: %v", iCopy, err)
 			return el
 		}
+
+		monitor.AddIpAddress(containerNameFormatted, ipAddress)
 
 		// id de todos os containers criados para a função start()
 		el.manager.Id = append(el.manager.Id, id)

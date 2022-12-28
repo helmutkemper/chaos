@@ -10,10 +10,19 @@ var FailChList = make([]<-chan string, 0)
 var DoneChList = make([]<-chan struct{}, 0)
 var EndFunc = make([]func(), 0)
 var ChaosFunc = make([]func(), 0)
+var IpAddress = make(map[string]string)
 
 var Err bool
 
 var counterEndFunc = 0
+
+func AddIpAddress(container, ip string) {
+	IpAddress[container] = ip
+}
+
+func GetIpAddress(container string) (ip string) {
+	return IpAddress[container]
+}
 
 func AddChaosFunc(f ...func()) {
 	ChaosFunc = append(ChaosFunc, f...)
