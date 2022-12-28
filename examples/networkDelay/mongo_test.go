@@ -45,12 +45,8 @@ func TestLinear(t *testing.T) {
 
 func mongoPopulate(t *testing.T) {
 	var err error
-	var timeOut = time.Second * 15
-
 	var mongoClient *mongo.Client
-	var ctx context.Context
-
-	start := time.Now()
+	var start = time.Now()
 
 	fmt.Printf("conexão\n")
 
@@ -59,13 +55,12 @@ func mongoPopulate(t *testing.T) {
 		panic(string(debug.Stack()))
 	}
 
-	err = mongoClient.Connect(ctx)
+	err = mongoClient.Connect(context.Background())
 	if err != nil {
 		panic(string(debug.Stack()))
 	}
 
-	ctx, _ = context.WithTimeout(context.Background(), timeOut)
-	err = mongoClient.Ping(ctx, readpref.Primary())
+	err = mongoClient.Ping(context.Background(), readpref.Primary())
 	if err != nil {
 		fmt.Printf("error: %v\n", err.Error())
 		panic(string(debug.Stack()))
