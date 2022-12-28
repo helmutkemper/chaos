@@ -1,0 +1,1 @@
+makedockerfile() tem uma função que copia arquivos para a imagem

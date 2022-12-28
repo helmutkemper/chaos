@@ -34,7 +34,7 @@ func main() {
 	var proxy networkdelay.Proxy
 	proxy.SetBufferSize(32 * 1024)
 	proxy.SetParserFunction(p)
-	proxy.SetDelayMillesecond(500, 1000)
+	proxy.SetDelayMillisecond(500, 1000)
 	go func() {
 		var err error
 		err = proxy.Proxy(*localAddr, *remoteAddr)
