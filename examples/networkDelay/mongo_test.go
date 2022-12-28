@@ -33,7 +33,7 @@ func TestLinear(t *testing.T) {
 		27016,
 		"delete_mongo_0:27017",
 		10, 100,
-		0.2,
+		0.0,
 	)
 
 	go mongoPopulate(t)
