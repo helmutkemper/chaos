@@ -155,7 +155,8 @@ func TestDevOps_Linear(t *testing.T) {
 ```
 
  * The `main.go` and `go.mod` files must be contained in the root folder of the project, when you use `MakeDockerfile()` function;
- * You can use the function `ReplaceBeforeBuild(dst, src string)` to replace `Dockerfile` or add new files to the test.
+ * You can use the function `ReplaceBeforeBuild(dst, src string)` to replace `Dockerfile` or add new files to the test;
+ * Use function `EnableChaos(maxStopped, maxPaused, maxPausedStoppedSameTime int)` to make chaos.
 
 ## Simulate network problems
 
@@ -265,8 +266,7 @@ func mongoPopulate(t *testing.T) {
 ## Important
 
 * All names in docker elements, created by chaos test, start by `delete_` and end by `_` + a sequential number (0,1,2...);
-* `NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1")` gives to the first container an IP `10.0.0.2`, but, you can use container name as address;
-* Use function `EnableChaos(maxStopped, maxPaused, maxPausedStoppedSameTime int)` to make chaos.
+* `NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1")` gives to the first container an IP `10.0.0.2`, but, you can use container name as address.
 
 # Vulnerability Report Example
 
