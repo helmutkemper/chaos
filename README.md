@@ -154,8 +154,8 @@ func TestDevOps_Linear(t *testing.T) {
 }
 ```
 
-> * The `main.go` and `go.mod` files must be contained in the root folder of the project, when you use `MakeDockerfile()` function;
-> * You can use the function `ReplaceBeforeBuild(dst, src string)` to replace `Dockerfile` or add new files to the test.
+ * The `main.go` and `go.mod` files must be contained in the root folder of the project, when you use `MakeDockerfile()` function;
+ * You can use the function `ReplaceBeforeBuild(dst, src string)` to replace `Dockerfile` or add new files to the test.
 
 ## Simulate network problems
 
