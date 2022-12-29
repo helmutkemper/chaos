@@ -391,33 +391,33 @@ An attacker may cause a denial of service by crafting an Accept-Language header 
 > Automatic function
 
 ```
-      @2022-12-16T04:17:02.324250972Z 2022/12/16 04:17:02 IP: 10.0.0.6
-      v2022-12-16T04:17:02.324469972Z 2022/12/16 04:17:02 [DEBUG] memberlist: Initiating push/pull sync with:  10.0.0.6:7946
-      =2022-12-16T04:17:02.325176930Z Member: be594d5ade2e 10.0.0.6
-      =2022-12-16T04:17:02.325184055Z Member: 48b8e00607b2 10.0.0.7
-      F2022-12-16T04:17:02.326104639Z 2022/12/16 04:17:02 nats connection ok
-      @2022-12-16T04:17:02.326115514Z 2022/12/16 04:17:02 chaos enable
-      m2022-12-16T04:17:18.253631340Z 2022/12/16 04:17:18 [DEBUG] memberlist: Stream connection from=10.0.0.8:40948
-      m2022-12-16T04:17:21.766587550Z 2022/12/16 04:17:21 [DEBUG] memberlist: Stream connection from=10.0.0.6:54688
-      G2022-12-16T04:17:22.327208800Z 2022/12/16 04:17:22 you can restart now
-      �2022-12-16T04:17:26.174066386Z 2022/12/16 04:17:26 [DEBUG] memberlist: Initiating push/pull sync with: be594d5ade2e 10.0.0.6:7946
-      m2022-12-16T04:17:33.256542333Z 2022/12/16 04:17:33 [DEBUG] memberlist: Stream connection from=10.0.0.8:48176
-      m2022-12-16T04:17:36.770945293Z 2022/12/16 04:17:36 [DEBUG] memberlist: Stream connection from=10.0.0.6:34038
-      �2022-12-16T04:17:41.178559545Z 2022/12/16 04:17:41 [DEBUG] memberlist: Initiating push/pull sync with: 575857e427da 10.0.0.8:7946
-      m2022-12-16T04:17:48.258598174Z 2022/12/16 04:17:48 [DEBUG] memberlist: Stream connection from=10.0.0.8:40284
-      �2022-12-16T04:17:56.183927386Z 2022/12/16 04:17:56 [DEBUG] memberlist: Initiating push/pull sync with: 575857e427da 10.0.0.8:7946
-      m2022-12-16T04:18:03.260538041Z 2022/12/16 04:18:03 [DEBUG] memberlist: Stream connection from=10.0.0.8:40656
-      w2022-12-16T04:18:03.524478167Z 2022/12/16 04:18:03 [DEBUG] memberlist: Failed UDP ping: be594d5ade2e (timeout reached)
-      x2022-12-16T04:18:04.325072375Z 2022/12/16 04:18:04 [INFO] memberlist: Suspect be594d5ade2e has failed, no acks received
-      w2022-12-16T04:18:05.523893459Z 2022/12/16 04:18:05 [DEBUG] memberlist: Failed UDP ping: be594d5ade2e (timeout reached)
-      �2022-12-16T04:18:05.542607542Z 2022/12/16 04:18:05 [INFO] memberlist: Marking be594d5ade2e as failed, suspect timeout reached (1 peer confirmations)
-      x2022-12-16T04:18:06.327539501Z 2022/12/16 04:18:06 [INFO] memberlist: Suspect be594d5ade2e has failed, no acks received
-      �2022-12-16T04:18:11.186402295Z 2022/12/16 04:18:11 [DEBUG] memberlist: Initiating push/pull sync with: 575857e427da 10.0.0.8:7946
-      m2022-12-16T04:18:18.262939049Z 2022/12/16 04:18:18 [DEBUG] memberlist: Stream connection from=10.0.0.8:34016
-      @2022-12-16T04:19:38.808491836Z 2022/12/16 04:19:38 IP: 10.0.0.6
-      v2022-12-16T04:19:38.808835169Z 2022/12/16 04:19:38 [DEBUG] memberlist: Initiating push/pull sync with:  10.0.0.6:7946
-      =2022-12-16T04:19:38.809361419Z Member: be594d5ade2e 10.0.0.6
-      =2022-12-16T04:19:38.809370169Z Member: 48b8e00607b2 10.0.0.7
-      ~2022-12-16T04:19:40.810843628Z 2022/12/16 04:19:40 nats connection error: read tcp 10.0.0.7:39924->10.0.0.2:4222: i/o timeout
-      r2022-12-16T04:19:40.810940878Z 2022/12/16 04:19:40 bug: messageSystem.Subscribe().error: nats: invalid connection
+2022-12-16T04:17:02.324250972Z 2022/12/16 04:17:02 IP: 10.0.0.6
+2022-12-16T04:17:02.324469972Z 2022/12/16 04:17:02 [DEBUG] memberlist: Initiating push/pull sync with:  10.0.0.6:7946
+2022-12-16T04:17:02.325176930Z Member: be594d5ade2e 10.0.0.6
+2022-12-16T04:17:02.325184055Z Member: 48b8e00607b2 10.0.0.7
+2022-12-16T04:17:02.326104639Z 2022/12/16 04:17:02 nats connection ok
+2022-12-16T04:17:02.326115514Z 2022/12/16 04:17:02 chaos enable
+2022-12-16T04:17:18.253631340Z 2022/12/16 04:17:18 [DEBUG] memberlist: Stream connection from=10.0.0.8:40948
+2022-12-16T04:17:21.766587550Z 2022/12/16 04:17:21 [DEBUG] memberlist: Stream connection from=10.0.0.6:54688
+2022-12-16T04:17:22.327208800Z 2022/12/16 04:17:22 you can restart now
+2022-12-16T04:17:26.174066386Z 2022/12/16 04:17:26 [DEBUG] memberlist: Initiating push/pull sync with: be594d5ade2e 10.0.0.6:7946
+2022-12-16T04:17:33.256542333Z 2022/12/16 04:17:33 [DEBUG] memberlist: Stream connection from=10.0.0.8:48176
+2022-12-16T04:17:36.770945293Z 2022/12/16 04:17:36 [DEBUG] memberlist: Stream connection from=10.0.0.6:34038
+2022-12-16T04:17:41.178559545Z 2022/12/16 04:17:41 [DEBUG] memberlist: Initiating push/pull sync with: 575857e427da 10.0.0.8:7946
+2022-12-16T04:17:48.258598174Z 2022/12/16 04:17:48 [DEBUG] memberlist: Stream connection from=10.0.0.8:40284
+2022-12-16T04:17:56.183927386Z 2022/12/16 04:17:56 [DEBUG] memberlist: Initiating push/pull sync with: 575857e427da 10.0.0.8:7946
+2022-12-16T04:18:03.260538041Z 2022/12/16 04:18:03 [DEBUG] memberlist: Stream connection from=10.0.0.8:40656
+2022-12-16T04:18:03.524478167Z 2022/12/16 04:18:03 [DEBUG] memberlist: Failed UDP ping: be594d5ade2e (timeout reached)
+2022-12-16T04:18:04.325072375Z 2022/12/16 04:18:04 [INFO] memberlist: Suspect be594d5ade2e has failed, no acks received
+2022-12-16T04:18:05.523893459Z 2022/12/16 04:18:05 [DEBUG] memberlist: Failed UDP ping: be594d5ade2e (timeout reached)
+2022-12-16T04:18:05.542607542Z 2022/12/16 04:18:05 [INFO] memberlist: Marking be594d5ade2e as failed, suspect timeout reached (1 peer confirmations)
+2022-12-16T04:18:06.327539501Z 2022/12/16 04:18:06 [INFO] memberlist: Suspect be594d5ade2e has failed, no acks received
+2022-12-16T04:18:11.186402295Z 2022/12/16 04:18:11 [DEBUG] memberlist: Initiating push/pull sync with: 575857e427da 10.0.0.8:7946
+2022-12-16T04:18:18.262939049Z 2022/12/16 04:18:18 [DEBUG] memberlist: Stream connection from=10.0.0.8:34016
+2022-12-16T04:19:38.808491836Z 2022/12/16 04:19:38 IP: 10.0.0.6
+2022-12-16T04:19:38.808835169Z 2022/12/16 04:19:38 [DEBUG] memberlist: Initiating push/pull sync with:  10.0.0.6:7946
+2022-12-16T04:19:38.809361419Z Member: be594d5ade2e 10.0.0.6
+2022-12-16T04:19:38.809370169Z Member: 48b8e00607b2 10.0.0.7
+2022-12-16T04:19:40.810843628Z 2022/12/16 04:19:40 nats connection error: read tcp 10.0.0.7:39924->10.0.0.2:4222: i/o timeout
+2022-12-16T04:19:40.810940878Z 2022/12/16 04:19:40 bug: messageSystem.Subscribe().error: nats: invalid connection
 ```
