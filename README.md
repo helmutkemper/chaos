@@ -18,7 +18,7 @@ containers are paused or restarted at random, pausing the transmission of data u
 failures such as loss of connection or excessive delay in the transmission of data.
 
 
-## Basic usage
+# Basic usage
 
 ### Using a git server
 
@@ -154,7 +154,8 @@ func TestDevOps_Linear(t *testing.T) {
 }
 ```
 
-> The `main.go` and `go.mod` files must be contained in the root folder of the project
+> * The `main.go` and `go.mod` files must be contained in the root folder of the project, when you use `MakeDockerfile()` function;
+> * You can use the function `ReplaceBeforeBuild(dst, src string)` to replace `Dockerfile` or add new files to the test.
 
 ## Simulate network problems
 
