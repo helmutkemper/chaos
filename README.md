@@ -259,3 +259,9 @@ func mongoPopulate(t *testing.T) {
 	fmt.Printf("Duration: %v\n\n", duration)
 }
 ```
+
+> Please, note: 
+> 
+> * All names in docker elements, created by chaos test, start by `delete_` and end by `_` + a sequential number (0,1,2...);
+> * `NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1")` gives to the first container an IP `10.0.0.2`, but, you can use container name.
+> 
