@@ -95,46 +95,124 @@ type reportData struct {
 }
 
 type containerCommon struct {
-	IPV4Address                    []string       // Lista de todos os IPs em uso
-	detach                         bool           // Detach container from monitor and network
-	detachMonitor                  bool           // Detach container from monitor only
-	portsContainer                 []nat.Port     // Port inside container and host computer port
-	portsHost                      [][]int64      // Port inside container and host computer port
-	volumeContainer                []string       // Volume inside container
-	volumeHost                     [][]string     // Volume inside host computer, where key is index from Create(copies) e.g. [key][]string
-	manager                        *Manager       // Pointer from the container manager (must be initialized)
-	imageExpirationTime            time.Duration  // Image expiration time, prevents the image from being recreated
-	buildPath                      string         // Path where the code to mount the image is located
-	replaceBeforeBuild             [][]string     // Path of files to be replaced, or added, before creation.
-	command                        string         // fromServer, fromFolder, fromImage
-	imageId                        string         // ID from image
-	imageName                      string         // Name from image
-	containerName                  string         // Container name
-	copies                         int            // Number of copies of containers
-	csvPath                        string         // Container inspection CSV report path
-	failPath                       string         // Crash report path
-	failFlag                       []string       // Flags (words) indicating failure
-	failLogsLastSize               []int          // Position of the text in the last reading of the container's standard output
-	environment                    [][]string     // Lista de environment variables from container
-	makeDefaultDockerfile          bool           // Flag indicating the need to assemble a standard Dockerfile automatically
-	makeDefaultDockerfileExtras    bool           // Flag indicating the need to assemble a standard Dockerfile automatically, complete options
-	enableCache                    bool           // fixme: a cache da versão antiga funciona
-	imageCacheName                 string         // Nome da imagem cache
-	autoDockerfile                 DockerfileAuto // Interface from code
-	contentGitConfigFile           string         // Passes data to the created image automatically, .gitconfig
-	contentKnownHostsFile          string         // Passes data to the created image automatically, .knowhosts
-	contentIdRsaFile               string         // Passes data to the created image automatically, id_rsa
-	contentIdEcdsaFile             string         // Passes data to the created image automatically, id_ecdsa
-	gitPathPrivateRepository       string         // Passes data to the created image automatically, GOPRIVATE=github.com/...
-	sshDefaultFileName             string
-	contentIdRsaFileWithScape      string
-	contentKnownHostsFileWithScape string
-	contentGitConfigFileWithScape  string
+	// Lista de todos os IPs em uso
+	IPV4Address []string
 
-	gitUrl               string
-	gitPrivateToke       string
-	gitUser              string
-	gitPassword          string
+	// Detach container from monitor and network
+	detach bool
+
+	// Detach container from monitor only
+	detachMonitor bool
+
+	// Port inside container and host computer port
+	portsContainer []nat.Port
+
+	// Port inside container and host computer port
+	portsHost [][]int64
+
+	// Volume inside container
+	volumeContainer []string
+
+	// Volume inside host computer, where key is index from Create(copies) e.g. [key][]string
+	volumeHost [][]string
+
+	// Pointer from the container manager (must be initialized)
+	manager *Manager
+
+	// Image expiration time, prevents the image from being recreated
+	imageExpirationTime time.Duration
+
+	// Path where the code to mount the image is located
+	buildPath string
+
+	// Path of files to be replaced, or added, before creation.
+	replaceBeforeBuild [][]string
+
+	// fromServer, fromFolder, fromImage
+	command string
+
+	// ID from image
+	imageId string
+
+	// Name from image
+	imageName string
+
+	// Container name
+	containerName string
+
+	// Number of copies of containers
+	copies int
+
+	// Container inspection CSV report path
+	csvPath string
+
+	// Crash report path
+	failPath string
+
+	// Flags (words) indicating failure
+	failFlag []string
+
+	// Position of the text in the last reading of the container's standard output
+	failLogsLastSize []int
+
+	// Lista de environment variables from container
+	environment [][]string
+
+	// Flag indicating the need to assemble a standard Dockerfile automatically
+	makeDefaultDockerfile bool
+
+	// Flag indicating the need to assemble a standard Dockerfile automatically, complete options
+	makeDefaultDockerfileExtras bool
+
+	// fixme: a cache da versão antiga funciona
+	enableCache bool
+
+	// Nome da imagem cache
+	imageCacheName string
+
+	// Interface from code
+	autoDockerfile DockerfileAuto
+
+	// Passes data to the created image automatically, .gitconfig
+	contentGitConfigFile string
+
+	// Passes data to the created image automatically, .knowhosts
+	contentKnownHostsFile string
+
+	// Passes data to the created image automatically, id_rsa
+	contentIdRsaFile string
+
+	// Passes data to the created image automatically, id_ecdsa
+	contentIdEcdsaFile string
+
+	// Passes data to the created image automatically, GOPRIVATE=github.com/...
+	gitPathPrivateRepository string
+
+	// User defined ssh certificate file name
+	sshDefaultFileName string
+
+	// Archive the contents of the certificate
+	contentIdRsaFileWithScape string
+
+	// Archives the contents of the knownhost file
+	contentKnownHostsFileWithScape string
+
+	// Archives the contents of the .gitconfig file
+	contentGitConfigFileWithScape string
+
+	// Archive git server url
+	gitUrl string
+
+	// Archive private git access token
+	gitPrivateToke string
+
+	// Archives git user
+	gitUser string
+
+	// Archives git password
+	gitPassword string
+
+	// Path from git private key
 	gitSshPrivateKeyPath string
 
 	ChaosEnabled                  bool
