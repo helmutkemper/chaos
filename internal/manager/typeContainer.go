@@ -37,6 +37,7 @@ const (
 	kSrc = 1
 )
 
+// Report from project https://github.com/google/osv-scanner
 type reportData struct {
 	Results []struct {
 		Source struct {
@@ -94,48 +95,37 @@ type reportData struct {
 }
 
 type containerCommon struct {
-	IPV4Address []string
-
-	// detach from monitor
-	detach        bool
-	detachMonitor bool
-
-	//port inside container and host computer port
-	portsContainer []nat.Port
-	portsHost      [][]int64
-
-	volumeContainer []string
-	volumeHost      [][]string
-
-	manager *Manager
-
-	imageExpirationTime time.Duration
-	buildPath           string
-	replaceBeforeBuild  [][]string
-	command             string
-	imageId             string
-	imageName           string
-	containerName       string
-	copies              int
-	csvPath             string
-	failPath            string
-	failFlag            []string
-	failLogsLastSize    []int
-
-	environment [][]string
-
-	makeDefaultDockerfile       bool
-	makeDefaultDockerfileExtras bool
-
-	enableCache    bool
-	imageCacheName string
-	autoDockerfile DockerfileAuto
-
-	contentGitConfigFile           string
-	contentKnownHostsFile          string
-	contentIdRsaFile               string
-	contentIdEcdsaFile             string
-	gitPathPrivateRepository       string
+	IPV4Address                    []string       // Lista de todos os IPs em uso
+	detach                         bool           // Detach container from monitor and network
+	detachMonitor                  bool           // Detach container from monitor only
+	portsContainer                 []nat.Port     // Port inside container and host computer port
+	portsHost                      [][]int64      // Port inside container and host computer port
+	volumeContainer                []string       // Volume inside container
+	volumeHost                     [][]string     // Volume inside host computer, where key is index from Create(copies) e.g. [key][]string
+	manager                        *Manager       // Pointer from the container manager (must be initialized)
+	imageExpirationTime            time.Duration  // Image expiration time, prevents the image from being recreated
+	buildPath                      string         // Path where the code to mount the image is located
+	replaceBeforeBuild             [][]string     // Path of files to be replaced, or added, before creation.
+	command                        string         // fromServer, fromFolder, fromImage
+	imageId                        string         // ID from image
+	imageName                      string         // Name from image
+	containerName                  string         // Container name
+	copies                         int            // Number of copies of containers
+	csvPath                        string         // Container inspection CSV report path
+	failPath                       string         // Crash report path
+	failFlag                       []string       // Flags (words) indicating failure
+	failLogsLastSize               []int          // Position of the text in the last reading of the container's standard output
+	environment                    [][]string     // Lista de environment variables from container
+	makeDefaultDockerfile          bool           // Flag indicating the need to assemble a standard Dockerfile automatically
+	makeDefaultDockerfileExtras    bool           // Flag indicating the need to assemble a standard Dockerfile automatically, complete options
+	enableCache                    bool           // fixme: a cache da versão antiga funciona
+	imageCacheName                 string         // Nome da imagem cache
+	autoDockerfile                 DockerfileAuto // Interface from code
+	contentGitConfigFile           string         // Passes data to the created image automatically, .gitconfig
+	contentKnownHostsFile          string         // Passes data to the created image automatically, .knowhosts
+	contentIdRsaFile               string         // Passes data to the created image automatically, id_rsa
+	contentIdEcdsaFile             string         // Passes data to the created image automatically, id_ecdsa
+	gitPathPrivateRepository       string         // Passes data to the created image automatically, GOPRIVATE=github.com/...
 	sshDefaultFileName             string
 	contentIdRsaFileWithScape      string
 	contentKnownHostsFileWithScape string
@@ -1254,55 +1244,6 @@ func (el *ContainerFromImage) chaosMountActionsList() {
 			doNotting += 1
 			affected += 1
 			el.queueContainerDoNotting(iCopy)
-		}
-	}
-
-	return
-	var iCopy = rand.Intn(el.copies - 1)
-
-	for iCopy = 0; iCopy != el.copies; iCopy += 1 {
-
-		if el.manager.Chaos[iCopy].Type != "" {
-			continue
-		}
-
-		if el.ChaosMaxPausedStoppedSameTime != 0 && el.ChaosMaxPausedStoppedSameTime <= stopped+paused {
-			return
-		}
-
-		for {
-			pass := false
-			action := rand.Intn(5) //todo: melhorar
-			switch action {
-
-			case 0: //stop
-				if el.ChaosMaxStopped != 0 && el.ChaosMaxStopped <= stopped {
-					continue
-				}
-
-				stopped += 1
-				el.queueContainerStop(iCopy)
-				pass = true
-
-			case 1: //pause
-				if el.ChaosMaxPaused != 0 && el.ChaosMaxPaused <= paused {
-					continue
-				}
-
-				paused += 1
-				el.queueContainerPause(iCopy)
-				pass = true
-
-			default: //do notting
-				continue // todo: apagar esta linha
-				el.queueContainerDoNotting(iCopy)
-				doNotting += 1
-				pass = true
-			}
-
-			if pass == true {
-				break
-			}
 		}
 	}
 }
