@@ -224,6 +224,9 @@ type containerCommon struct {
 
 	VulnerabilityReport     bool
 	VulnerabilityReportPath string
+
+	ContainerWaitTextInLog        string
+	ContainerWaitTextInLogTimeout time.Duration
 }
 
 type ContainerFromImage struct {
@@ -241,6 +244,31 @@ func (el *ContainerFromImage) MakeDockerfile() (ref *ContainerFromImage) {
 	el.makeDefaultDockerfile = true
 	el.makeDefaultDockerfileExtras = true
 
+	return el
+}
+
+// WaitForFlag
+//
+// Wait for a flag (word) in the container's standard output
+func (el *ContainerFromImage) WaitForFlag(text string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
+	el.ContainerWaitTextInLog = text
+	return el
+}
+
+// WaitForFlagTimeout
+//
+// Wait for a flag (word) in the container's standard output
+func (el *ContainerFromImage) WaitForFlagTimeout(text string, timeout time.Duration) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
+	el.ContainerWaitTextInLogTimeout = timeout
+	el.ContainerWaitTextInLog = text
 	return el
 }
 
@@ -1093,6 +1121,20 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 	var err error
 
 	for i := 0; i != el.copies; i += 1 {
+		if el.ContainerWaitTextInLog != "" && el.ContainerWaitTextInLogTimeout == 0 {
+			_, err = el.manager.DockerSys[i].ContainerLogsWaitText(el.manager.Id[i], el.ContainerWaitTextInLog, nil)
+			monitor.Err = true
+			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerLogsWaitText().error: %v", i, err)
+			return el
+		} else if el.ContainerWaitTextInLog != "" && el.ContainerWaitTextInLogTimeout != 0 {
+			_, err = el.manager.DockerSys[i].ContainerLogsWaitTextWithTimeout(el.manager.Id[i], el.ContainerWaitTextInLog, el.ContainerWaitTextInLogTimeout, nil)
+			if err != nil {
+				monitor.Err = true
+				el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerLogsWaitTextWithTimeout().error: %v", i, err)
+				return el
+			}
+		}
+
 		err = el.manager.DockerSys[i].ContainerStart(el.manager.Id[i])
 		if err != nil {
 			monitor.Err = true

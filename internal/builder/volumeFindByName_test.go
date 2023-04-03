@@ -173,7 +173,7 @@ func ExampleDockerSystem_VolumeFindByName() {
 		panic(err)
 	}
 
-	err = dockerSys.ContainerStopAndRemove(containerId, false, false, false)
+	err = dockerSys.ContainerStopAndRemove(containerId)
 	if err != nil {
 		panic(err)
 	}

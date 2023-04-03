@@ -116,7 +116,7 @@ func ExampleDockerSystem_ContainerStopAndRemove() {
 		"image_server_delete_before_test:latest",
 		[]string{},
 		types.ImageBuildOptions{},
-		&chStatus, // [channel|nil]
+		chStatus, // [channel|nil]
 	)
 	if err != nil {
 		panic(err)
@@ -179,7 +179,7 @@ func ExampleDockerSystem_ContainerStopAndRemove() {
 	// Português: termina a goroutine
 	chProcessEnd <- true
 
-	err = dockerSys.ContainerStopAndRemove(containerId, true, false, false)
+	err = dockerSys.ContainerStopAndRemove(containerId)
 	if err != nil {
 		panic(err)
 	}

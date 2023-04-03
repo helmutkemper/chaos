@@ -9,6 +9,7 @@ import (
 	"github.com/docker/go-connections/nat"
 	"github.com/helmutkemper/iotmaker.docker/util"
 	"os"
+	"time"
 )
 
 func ExampleDockerSystem_ContainerWaitStatusNotRunning() {
@@ -117,7 +118,7 @@ func ExampleDockerSystem_ContainerWaitStatusNotRunning() {
 		"image_server_delete_before_test:latest",
 		[]string{},
 		types.ImageBuildOptions{},
-		&chStatus, // [channel|nil]
+		chStatus, // [channel|nil]
 	)
 	if err != nil {
 		panic(err)
@@ -180,7 +181,7 @@ func ExampleDockerSystem_ContainerWaitStatusNotRunning() {
 	// Português: termina a goroutine
 	chProcessEnd <- true
 
-	err = dockerSys.ContainerWaitStatusNotRunning(containerId)
+	err = dockerSys.ContainerWaitStatusNotRunning(containerId, time.Minute)
 	if err != nil {
 		panic(err)
 	}

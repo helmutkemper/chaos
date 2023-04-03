@@ -117,7 +117,7 @@ func ExampleDockerSystem_ContainerWaitStatusRemoved() {
 		"image_server_delete_before_test:latest",
 		[]string{},
 		types.ImageBuildOptions{},
-		&chStatus, // [channel|nil]
+		chStatus, // [channel|nil]
 	)
 	if err != nil {
 		panic(err)
@@ -186,7 +186,7 @@ func ExampleDockerSystem_ContainerWaitStatusRemoved() {
 		for {
 			select {
 			case <-ticker.C:
-				err = dockerSys.ContainerStopAndRemove(containerId, true, false, false)
+				err = dockerSys.ContainerStopAndRemove(containerId)
 				if err != nil {
 					panic(err)
 				}
