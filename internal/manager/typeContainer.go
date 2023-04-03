@@ -1121,6 +1121,13 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 	var err error
 
 	for i := 0; i != el.copies; i += 1 {
+		err = el.manager.DockerSys[i].ContainerStart(el.manager.Id[i])
+		if err != nil {
+			monitor.Err = true
+			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerStart().error: %v", i, err)
+			return el
+		}
+
 		if el.ContainerWaitTextInLog != "" && el.ContainerWaitTextInLogTimeout == 0 {
 			_, err = el.manager.DockerSys[i].ContainerLogsWaitText(el.manager.Id[i], el.ContainerWaitTextInLog, nil)
 			monitor.Err = true
@@ -1133,13 +1140,6 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 				el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerLogsWaitTextWithTimeout().error: %v", i, err)
 				return el
 			}
-		}
-
-		err = el.manager.DockerSys[i].ContainerStart(el.manager.Id[i])
-		if err != nil {
-			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerStart().error: %v", i, err)
-			return el
 		}
 	}
 
