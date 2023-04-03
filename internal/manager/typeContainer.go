@@ -1127,7 +1127,9 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerStart().error: %v", i, err)
 			return el
 		}
+	}
 
+	for i := 0; i != el.copies; i += 1 {
 		if el.ContainerWaitTextInLog != "" && el.ContainerWaitTextInLogTimeout == 0 {
 			_, err = el.manager.DockerSys[i].ContainerLogsWaitText(el.manager.Id[i], el.ContainerWaitTextInLog, nil)
 			monitor.Err = true
