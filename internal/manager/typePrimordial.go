@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/helmutkemper/chaos/internal/monitor"
 	"github.com/helmutkemper/chaos/internal/standalone"
+	"log"
 	"strings"
 	"testing"
 	"time"
@@ -72,6 +73,12 @@ func (el *Primordial) Monitor(duration time.Duration) (pass bool) {
 // Returns the last error from the test
 func (el *Primordial) GetLastError() (err error) {
 	if monitor.Err == false {
+		return nil
+	}
+
+	log.Println("primordial.GetLastError().error: ", cap(el.manager.ErrorCh))
+
+	if cap(el.manager.ErrorCh) == 10 {
 		return nil
 	}
 
