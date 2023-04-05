@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+var ErrorCh chan error
+
 type dockerNetwork struct {
 	generator   *builder.NextNetworkAutoConfiguration
 	networkID   string
@@ -58,19 +60,23 @@ type Manager struct {
 	ChaosConfig       chaosConfig
 	ImageBuildOptions types.ImageBuildOptions
 
-	DoneCh  chan struct{}
-	ErrorCh chan error
-	FailCh  chan string
+	DoneCh chan struct{}
+
+	FailCh chan string
 }
 
 func (el *Manager) New() {
 	var err error
+
+	if ErrorCh == nil {
+		ErrorCh = make(chan error, 10)
+	}
+
 	el.Id = make([]string, 0)
 	el.DockerSys = make([]*builder.DockerSystem, 1)
 	el.DockerSys[0] = new(builder.DockerSystem)
 
 	el.DoneCh = make(chan struct{})
-	el.ErrorCh = make(chan error, 10)
 	el.FailCh = make(chan string)
 
 	el.ChaosConfig.maximumTimeDelay = 90 * time.Second
@@ -86,7 +92,7 @@ func (el *Manager) New() {
 
 	err = el.DockerSys[0].Init()
 	if err != nil {
-		el.ErrorCh <- fmt.Errorf("chaos.Manager.New().error: %v. Usually this error occurs when docker is not running", err)
+		ErrorCh <- fmt.Errorf("chaos.Manager.New().error: %v. Usually this error occurs when docker is not running", err)
 		return
 	}
 
@@ -95,7 +101,7 @@ func (el *Manager) New() {
 
 func (el *Manager) addMonitor() {
 	monitor.DoneChList = append(monitor.DoneChList, el.DoneCh)
-	monitor.ErrorChList = append(monitor.ErrorChList, el.ErrorCh)
+	monitor.ErrorChList = append(monitor.ErrorChList, ErrorCh)
 	monitor.FailChList = append(monitor.FailChList, el.FailCh)
 }
 

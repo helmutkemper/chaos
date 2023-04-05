@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/helmutkemper/chaos/internal/monitor"
 	"github.com/helmutkemper/chaos/internal/standalone"
-	"log"
 	"strings"
 	"testing"
 	"time"
@@ -44,7 +43,7 @@ func (el *Primordial) NetworkCreate(name, subnet, gateway string) (ref *Primordi
 	}
 
 	if _, err = el.manager.networkCreate(name, subnet, gateway); err != nil {
-		el.manager.ErrorCh <- fmt.Errorf("primordial.NetworkCreate().error: %v", err)
+		ErrorCh <- fmt.Errorf("primordial.NetworkCreate().error: %v", err)
 		return el
 	}
 
@@ -76,13 +75,7 @@ func (el *Primordial) GetLastError() (err error) {
 		return nil
 	}
 
-	log.Println("primordial.GetLastError().error: ", cap(el.manager.ErrorCh))
-
-	if cap(el.manager.ErrorCh) == 10 {
-		return nil
-	}
-
-	return <-el.manager.ErrorCh
+	return <-ErrorCh
 }
 
 // GarbageCollector

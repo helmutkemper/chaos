@@ -305,7 +305,7 @@ func (el *ContainerFromImage) Volumes(containerPath string, hostPath ...string) 
 			absolutePath, err = filepath.Abs(hostPath[k])
 			if err != nil {
 				monitor.Err = true
-				el.manager.ErrorCh <- fmt.Errorf("containerFromImage.Volumes().error: %v", err)
+				ErrorCh <- fmt.Errorf("containerFromImage.Volumes().error: %v", err)
 				return el
 			}
 		} else {
@@ -348,7 +348,7 @@ func (el *ContainerFromImage) Ports(containerProtocol string, containerPort int6
 	port, err := nat.NewPort(containerProtocol, strconv.FormatInt(containerPort, 10))
 	if err != nil {
 		monitor.Err = true
-		el.manager.ErrorCh <- fmt.Errorf("containerFromImage.ExposePorts().error: %v", err)
+		ErrorCh <- fmt.Errorf("containerFromImage.ExposePorts().error: %v", err)
 		return
 	}
 
@@ -716,12 +716,12 @@ func (el *ContainerFromImage) SaveStatistics(path string) (ref *ContainerFromIma
 	if fileInfo, err = os.Stat(path); err != nil {
 		if err = os.MkdirAll(path, fs.ModePerm); err != nil {
 			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container.SaveStatistics().MkdirAll().error: %v", "directory not found")
+			ErrorCh <- fmt.Errorf("container.SaveStatistics().MkdirAll().error: %v", "directory not found")
 			return el
 		}
 	} else if !fileInfo.IsDir() {
 		monitor.Err = true
-		el.manager.ErrorCh <- fmt.Errorf("container.SaveStatistics().error: %v", "directory not found")
+		ErrorCh <- fmt.Errorf("container.SaveStatistics().error: %v", "directory not found")
 		return el
 	}
 
@@ -745,7 +745,7 @@ func (el *ContainerFromImage) ReplaceBeforeBuild(dst, src string) (ref *Containe
 	src, err = filepath.Abs(src)
 	if err != nil {
 		monitor.Err = true
-		el.manager.ErrorCh <- fmt.Errorf("container.ReplaceBeforeBuild().error: %v", err)
+		ErrorCh <- fmt.Errorf("container.ReplaceBeforeBuild().error: %v", err)
 		return el
 	}
 
@@ -771,12 +771,12 @@ func (el *ContainerFromImage) FailFlag(path string, flags ...string) (ref *Conta
 	if fileInfo, err = os.Stat(path); err != nil {
 		if err = os.MkdirAll(path, fs.ModePerm); err != nil {
 			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container.FailFlag().MkdirAll().error: %v", "directory not found")
+			ErrorCh <- fmt.Errorf("container.FailFlag().MkdirAll().error: %v", "directory not found")
 			return el
 		}
 	} else if !fileInfo.IsDir() {
 		monitor.Err = true
-		el.manager.ErrorCh <- fmt.Errorf("container.FailFlag().error: %v", "directory not found")
+		ErrorCh <- fmt.Errorf("container.FailFlag().error: %v", "directory not found")
 		return el
 	}
 
@@ -867,12 +867,12 @@ func (el *ContainerFromImage) VulnerabilityScanner(path string) (ref *ContainerF
 	if fileInfo, err = os.Stat(path); err != nil {
 		if err = os.MkdirAll(path, fs.ModePerm); err != nil {
 			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container.VulnerabilityScanner().MkdirAll().error: %v", "directory not found")
+			ErrorCh <- fmt.Errorf("container.VulnerabilityScanner().MkdirAll().error: %v", "directory not found")
 			return el
 		}
 	} else if !fileInfo.IsDir() {
 		monitor.Err = true
-		el.manager.ErrorCh <- fmt.Errorf("container.VulnerabilityScanner().error: %v", "directory not found")
+		ErrorCh <- fmt.Errorf("container.VulnerabilityScanner().error: %v", "directory not found")
 		return el
 	}
 
@@ -1061,7 +1061,7 @@ func (el *ContainerFromImage) Stop() (ref *ContainerFromImage) {
 		err = el.manager.DockerSys[i].ContainerStop(el.manager.Id[i])
 		if err != nil {
 			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container[%v].Stop().ContainerStop().error: %v", i, err)
+			ErrorCh <- fmt.Errorf("container[%v].Stop().ContainerStop().error: %v", i, err)
 			return el
 		}
 	}
@@ -1080,7 +1080,7 @@ func (el *ContainerFromImage) WaitStatusNotRunning(timeout time.Duration) (ref *
 		err = el.manager.DockerSys[i].ContainerWaitStatusNotRunning(el.manager.Id[i], timeout)
 		if err != nil {
 			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container[%v].containerWaitStatusNotRunning().error: %v", i, err)
+			ErrorCh <- fmt.Errorf("container[%v].containerWaitStatusNotRunning().error: %v", i, err)
 			return el
 		}
 	}
@@ -1102,7 +1102,7 @@ func (el *ContainerFromImage) Remove() (ref *ContainerFromImage) {
 		err = el.manager.DockerSys[i].ContainerRemove(el.manager.Id[i], true, false, true)
 		if err != nil {
 			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container[%v].Remove().ContainerRemove().error: %v", i, err)
+			ErrorCh <- fmt.Errorf("container[%v].Remove().ContainerRemove().error: %v", i, err)
 			return el
 		}
 	}
@@ -1124,7 +1124,7 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 		err = el.manager.DockerSys[i].ContainerStart(el.manager.Id[i])
 		if err != nil {
 			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerStart().error: %v", i, err)
+			ErrorCh <- fmt.Errorf("container[%v].Start().ContainerStart().error: %v", i, err)
 			return el
 		}
 	}
@@ -1133,13 +1133,13 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 		if el.ContainerWaitTextInLog != "" && el.ContainerWaitTextInLogTimeout == 0 {
 			_, err = el.manager.DockerSys[i].ContainerLogsWaitText(el.manager.Id[i], el.ContainerWaitTextInLog, nil)
 			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerLogsWaitText().error: %v", i, err)
+			ErrorCh <- fmt.Errorf("container[%v].Start().ContainerLogsWaitText().error: %v", i, err)
 			return el
 		} else if el.ContainerWaitTextInLog != "" && el.ContainerWaitTextInLogTimeout != 0 {
 			_, err = el.manager.DockerSys[i].ContainerLogsWaitTextWithTimeout(el.manager.Id[i], el.ContainerWaitTextInLog, el.ContainerWaitTextInLogTimeout, nil)
 			if err != nil {
 				monitor.Err = true
-				el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerLogsWaitTextWithTimeout().error: %v", i, err)
+				ErrorCh <- fmt.Errorf("container[%v].Start().ContainerLogsWaitTextWithTimeout().error: %v", i, err)
 				return el
 			}
 		}
@@ -1154,13 +1154,13 @@ func (el *ContainerFromImage) Start() (ref *ContainerFromImage) {
 		inspect, err = el.manager.DockerSys[i].ContainerInspect(el.manager.Id[i])
 		if err != nil {
 			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().ContainerInspect().error: %v", i, err)
+			ErrorCh <- fmt.Errorf("container[%v].Start().ContainerInspect().error: %v", i, err)
 			return el
 		}
 
 		if inspect.State == nil || inspect.State.Running == false {
 			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container[%v].Start().error: %v", i, "container is't running")
+			ErrorCh <- fmt.Errorf("container[%v].Start().error: %v", i, "container is't running")
 			return el
 		}
 	}
@@ -1382,7 +1382,7 @@ func (el *ContainerFromImage) chaosExecuteAction() (end bool) {
 					log.Printf("%v: %v", chaos.display, el.manager.DockerSys[iCopy].ContainerName)
 					if err = chaos.action(chaos.id); err != nil {
 						monitor.Err = true
-						el.manager.ErrorCh <- fmt.Errorf("container[%v].chaosExecuteAction().chaos.action(%v).error: %v", iCopy, chaos.id, err)
+						ErrorCh <- fmt.Errorf("container[%v].chaosExecuteAction().chaos.action(%v).error: %v", iCopy, chaos.id, err)
 						return
 					}
 				} else {
@@ -1428,7 +1428,7 @@ func (el *ContainerFromImage) failToLog() {
 		logs, err = el.manager.DockerSys[i].ContainerLogs(el.manager.Id[i])
 		if err != nil {
 			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container[%v].failFlagThread().ContainerLogs().error: %v", i, err)
+			ErrorCh <- fmt.Errorf("container[%v].failFlagThread().ContainerLogs().error: %v", i, err)
 			return
 		}
 
@@ -1495,7 +1495,7 @@ func (el *ContainerFromImage) logsSearchAndReplaceIntoText(key int, logs *[]byte
 					dirList, err = ioutil.ReadDir(pathLog)
 					if err != nil {
 						monitor.Err = true
-						el.manager.ErrorCh <- fmt.Errorf("container.logsSearchAndReplaceIntoText().ioutil.ReadDir(%v).error: %v", pathLog, err)
+						ErrorCh <- fmt.Errorf("container.logsSearchAndReplaceIntoText().ioutil.ReadDir(%v).error: %v", pathLog, err)
 						return
 					}
 					var totalOfFiles = strconv.Itoa(len(dirList))
@@ -1503,7 +1503,7 @@ func (el *ContainerFromImage) logsSearchAndReplaceIntoText(key int, logs *[]byte
 					err = ioutil.WriteFile(path, *logs, fs.ModePerm)
 					if err != nil {
 						monitor.Err = true
-						el.manager.ErrorCh <- fmt.Errorf("container.logsSearchAndReplaceIntoText().ioutil.WriteFile(%v).error: %v", path, err)
+						ErrorCh <- fmt.Errorf("container.logsSearchAndReplaceIntoText().ioutil.WriteFile(%v).error: %v", path, err)
 						return
 					}
 				}
@@ -1550,7 +1550,7 @@ func (el *ContainerFromImage) statsThread() {
 			file[i], err = os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, fs.ModePerm)
 			if err != nil {
 				monitor.Err = true
-				el.manager.ErrorCh <- fmt.Errorf("container[%v].statsThread().OpenFile().error: %v", i, err)
+				ErrorCh <- fmt.Errorf("container[%v].statsThread().OpenFile().error: %v", i, err)
 				return
 			}
 		}
@@ -1617,7 +1617,7 @@ func (el *ContainerFromImage) statsThread() {
 			err = writer.WriteAll(line)
 			if err != nil {
 				monitor.Err = true
-				el.manager.ErrorCh <- fmt.Errorf("container[%v].statsThread().WriteAll(0).error: %v", i, err)
+				ErrorCh <- fmt.Errorf("container[%v].statsThread().WriteAll(0).error: %v", i, err)
 				return
 			}
 		}
@@ -1630,7 +1630,7 @@ func (el *ContainerFromImage) statsThread() {
 					stats, err = el.manager.DockerSys[i].ContainerStatisticsOneShot(el.manager.Id[i])
 					if err != nil {
 						monitor.Err = true
-						el.manager.ErrorCh <- fmt.Errorf("container[%v].statsThread().ContainerInspect().error: %v", i, err)
+						ErrorCh <- fmt.Errorf("container[%v].statsThread().ContainerInspect().error: %v", i, err)
 						continue
 					}
 
@@ -1710,7 +1710,7 @@ func (el *ContainerFromImage) statsThread() {
 					err = writer.WriteAll(line)
 					if err != nil {
 						monitor.Err = true
-						el.manager.ErrorCh <- fmt.Errorf("container[%v].statsThread().WriteAll(1).error: %v", i, err)
+						ErrorCh <- fmt.Errorf("container[%v].statsThread().WriteAll(1).error: %v", i, err)
 						return
 					}
 
@@ -1768,12 +1768,12 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 			err = el.imageBuild(el.imageCacheName)
 			if err != nil {
 				monitor.Err = true
-				el.manager.ErrorCh <- fmt.Errorf("container.Create().imageBuild(%v).error: %v", el.imageCacheName, err)
+				ErrorCh <- fmt.Errorf("container.Create().imageBuild(%v).error: %v", el.imageCacheName, err)
 				return el
 			}
 		} else if err != nil {
 			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container.Create().ImageFindIdByName().error: %v", err)
+			ErrorCh <- fmt.Errorf("container.Create().ImageFindIdByName().error: %v", err)
 			return el
 		}
 	}
@@ -1781,7 +1781,7 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 	err = el.imageBuild(el.imageName)
 	if err != nil {
 		monitor.Err = true
-		el.manager.ErrorCh <- fmt.Errorf("container.Create().imageBuild(%v).error: %v", el.imageName, err)
+		ErrorCh <- fmt.Errorf("container.Create().imageBuild(%v).error: %v", el.imageName, err)
 		return el
 	}
 
@@ -1803,7 +1803,7 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 			ipAddress, netConfig, err = networkManagerGlobal.generator.GetNext()
 			if err != nil {
 				monitor.Err = true
-				el.manager.ErrorCh <- fmt.Errorf("container.Create().network.GetNext().error: %v", err)
+				ErrorCh <- fmt.Errorf("container.Create().network.GetNext().error: %v", err)
 				return el
 			}
 			el.IPV4Address = append(el.IPV4Address, ipAddress)
@@ -1839,7 +1839,7 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 		)
 		if err != nil {
 			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container[%v].Create().ContainerCreateWithConfig().error: %v", iCopy, err)
+			ErrorCh <- fmt.Errorf("container[%v].Create().ContainerCreateWithConfig().error: %v", iCopy, err)
 			return el
 		}
 
@@ -1851,7 +1851,7 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 		//todo: fazer warnings - não deve ser erro
 		if len(warnings) != 0 {
 			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container[%v].Create().ContainerCreateWithConfig().warnings: %v", iCopy, strings.Join(warnings, "; "))
+			ErrorCh <- fmt.Errorf("container[%v].Create().ContainerCreateWithConfig().warnings: %v", iCopy, strings.Join(warnings, "; "))
 			return el
 		}
 	}
@@ -2292,7 +2292,7 @@ func (el *ContainerFromImage) imageExpirationTimeIsValid() (valid bool) {
 	inspect, err = el.manager.DockerSys[0].ImageInspect(el.imageId)
 	if err != nil {
 		monitor.Err = true
-		el.manager.ErrorCh <- fmt.Errorf("container.imageExpirationTimeIsValid().ImageInspect().error: %v", err)
+		ErrorCh <- fmt.Errorf("container.imageExpirationTimeIsValid().ImageInspect().error: %v", err)
 		return
 	}
 
@@ -2300,7 +2300,7 @@ func (el *ContainerFromImage) imageExpirationTimeIsValid() (valid bool) {
 	imageCreated, err = time.Parse(time.RFC3339Nano, inspect.Created)
 	if err != nil {
 		monitor.Err = true
-		el.manager.ErrorCh <- fmt.Errorf("container.imageExpirationTimeIsValid().Parse().error: %v", err)
+		ErrorCh <- fmt.Errorf("container.imageExpirationTimeIsValid().Parse().error: %v", err)
 		return
 	}
 	return imageCreated.Add(el.imageExpirationTime).After(time.Now())
@@ -3343,7 +3343,7 @@ func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (ref *ContainerFromI
 	userData, err = user.Current()
 	if err != nil {
 		monitor.Err = true
-		el.manager.ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().Current().error: %v", err)
+		ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().Current().error: %v", err)
 		return el
 	}
 
@@ -3351,7 +3351,7 @@ func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (ref *ContainerFromI
 		el.sshDefaultFileName, err = el.GetSshKeyFileName(userData.HomeDir)
 		if err != nil {
 			monitor.Err = true
-			el.manager.ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().GetSshKeyFileName().error: %v", err)
+			ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().GetSshKeyFileName().error: %v", err)
 			return el
 		}
 	}
@@ -3360,7 +3360,7 @@ func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (ref *ContainerFromI
 	fileData, err = ioutil.ReadFile(filePathToRead)
 	if err != nil {
 		monitor.Err = true
-		el.manager.ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile(0).error: %v", err)
+		ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile(0).error: %v", err)
 		return el
 	}
 
@@ -3371,7 +3371,7 @@ func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (ref *ContainerFromI
 	fileData, err = ioutil.ReadFile(filePathToRead)
 	if err != nil {
 		monitor.Err = true
-		el.manager.ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile(1).error: %v", err)
+		ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile(1).error: %v", err)
 		return el
 	}
 
@@ -3382,7 +3382,7 @@ func (el *ContainerFromImage) PrivateRepositoryAutoConfig() (ref *ContainerFromI
 	fileData, err = ioutil.ReadFile(filePathToRead)
 	if err != nil {
 		monitor.Err = true
-		el.manager.ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile(2).error: %v", err)
+		ErrorCh <- fmt.Errorf("container.PrivateRepositoryAutoConfig().ReadFile(2).error: %v", err)
 		return el
 	}
 
