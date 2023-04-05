@@ -67,6 +67,17 @@ func (el *Primordial) Monitor(duration time.Duration) (pass bool) {
 	return monitor.Monitor()
 }
 
+// GetLastError
+//
+// Returns the last error from the test
+func (el *Primordial) GetLastError() (err error) {
+	if monitor.Err == false {
+		return nil
+	}
+
+	return <-el.manager.ErrorCh
+}
+
 // GarbageCollector
 //
 // Deletes all Docker elements with `delete` in the name.
