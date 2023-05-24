@@ -74,6 +74,7 @@ func TestLinear(t *testing.T) {
 		"./consumer",
 	).
 		MakeDockerfile().
+		DockerfileBuild("/app", "/app/main", "/app/main.go").
 		Volumes("/data", "./data").
 		Create("consumer", 1).
 		Start()
@@ -84,6 +85,7 @@ func TestLinear(t *testing.T) {
 		"./producer",
 	).
 		MakeDockerfile().
+		DockerfileBuild("/app", "/app/main", "/app/main.go").
 		Volumes("/data", "./data").
 		Create("producer", 1).
 		Start()

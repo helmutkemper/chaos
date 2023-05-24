@@ -21,6 +21,9 @@ type DockerfileGolang struct {
 	finalImageName     string
 	sshDefaultFileName string
 	copy               []Copy
+	workDir            string
+	buildDst           string
+	buildSrc           string
 }
 
 // SetFinalImageName
@@ -92,7 +95,35 @@ func (e *DockerfileGolang) SetDefaultSshFileName(name string) {
 //	Oração do programador.
 func (e *DockerfileGolang) Prayer() {
 	log.Print("Português:")
-	log.Print("Código nosso que estais em Golang\nSantificado seja Vós, Console\nVenha a nós a Vossa Reflexão\nE seja feita as {Vossas chaves}\nAssim no if(){}\nComo no else{}\nO for (nosso; de cada dia; nos dai hoje++)\nDebugai as nossas sentenças\nAssim como nós colocamos\nO ponto e vírgula esquecido;\nE não nos\n\tdeixeis errar\n\t\ta indentação\nMas, livrai-nos das funções recursivas\nA main()\n\n\n")
+	log.Print("Código nosso que estais em Golang\nSantificado seja Vós, Console\nVenha a nós a Vossa Reflexão\nE seja feita as {Vossas chaves}\nAssim no if(){}\nComo no else{}\nO for (nosso; de cada dia; nos dai hoje++)\nDebugai as nossas sentenças\nAssim como nós colocamos\nO ponto e vírgula esquecido;\nE não nos\n\tdeixeis errar\n\t\ta indentação\nMas, livrai-nos das funções recursivas\nA main()")
+	log.Print("")
+}
+
+// SetWorkDir
+//
+// English:
+//
+//	Define work dir. e.g. /app (Dockerfile: WORKDIR /app)
+//
+// Português:
+//
+//	Define o diretório de trabalho ex.: /app (Dockerfile: WORKDIR /app)
+func (e *DockerfileGolang) SetWorkDir(dir string) {
+	e.workDir = dir
+}
+
+// SetGolangSrc
+//
+// English:
+//
+//	Define the destination and source files for go build command e.g. SetGolangSrc("/app/main", "/app/main.go"): RUN go build -ldflags="-w -s" -o (dst) /app/main (src) /app/main.go
+//
+// Português:
+//
+//	Define os arquivos de destino e fonte para o comando go build, ex.: SetGolangSrc("/app/main", "/app/main.go"): RUN go build -ldflags="-w -s" -o (dst) /app/main (src) /app/main.go
+func (e *DockerfileGolang) SetGolangSrc(dst, src string) {
+	e.buildDst = dst
+	e.buildSrc = src
 }
 
 // MountDefaultDockerfile
@@ -140,6 +171,18 @@ func (e *DockerfileGolang) MountDefaultDockerfile(
 
 	var info fs.FileInfo
 	var found bool
+
+	if e.workDir == "" {
+		e.workDir = "/app"
+	}
+
+	if e.buildDst == "" {
+		e.buildDst = "/app/main"
+	}
+
+	if e.buildSrc == "" {
+		e.buildSrc = "/app/main.go"
+	}
 
 	if e.finalImageName == "" {
 		e.finalImageName = "golang:1.19-alpine"
@@ -285,11 +328,11 @@ RUN mkdir -p /root/.ssh/ && \
     # (pt) limpa a cache
     rm -rf /var/cache/apk/*
 #
-# (en) creates the /app directory, where your code will be installed
-# (pt) cria o diretório /app, onde seu código vai ser instalado
-WORKDIR /app
-# (en) copy your project into the /app folder
-# (pt) copia seu projeto para dentro da pasta /app
+# (en) creates the /workDir directory, where your code will be installed
+# (pt) cria o diretório /workDir, onde seu código vai ser instalado
+WORKDIR ` + e.workDir + `
+# (en) copy your project into the /workDir folder
+# (pt) copia seu projeto para dentro da pasta /workDir
 COPY . .
 # (en) enables the golang compiler to run on an extremely simple OS, scratch
 # (pt) habilita o compilador do golang para rodar em um OS extremamente simples, o scratch
@@ -314,7 +357,7 @@ RUN go env -w GOPRIVATE=$GIT_PRIVATE_REPO
 RUN go mod tidy
 # (en) compiles the main.go file
 # (pt) compila o arquivo main.go
-RUN go build -ldflags="-w -s" -o /app/main /app/main.go
+RUN go build -ldflags="-w -s" -o ` + e.buildDst + ` ` + e.buildSrc + `
 # (en) creates a new scratch-based image
 # (pt) cria uma nova imagem baseada no scratch
 # (en) scratch is an extremely simple OS capable of generating very small images
@@ -329,11 +372,11 @@ RUN go build -ldflags="-w -s" -o /app/main /app/main.go
 FROM ` + e.finalImageName + `
 # (en) copy your project to the new image
 # (pt) copia o seu projeto para a nova imagem
-COPY --from=builder /app/main .
+COPY --from=builder ` + e.buildDst + ` .
 `
 
 		for _, copyFile := range e.copy {
-			dockerfile += `COPY --from=builder /app/` + copyFile.Dst + ` ` + copyFile.Src + `
+			dockerfile += `COPY --from=builder ` + copyFile.Dst + ` ` + copyFile.Src + `
 `
 		}
 
@@ -345,11 +388,11 @@ COPY --from=builder /app/main .
 FROM scratch
 # (en) copy your project to the new image
 # (pt) copia o seu projeto para a nova imagem
-COPY --from=builder /app/main .
+COPY --from=builder ` + e.buildDst + ` .
 `
 
 		for _, copyFile := range e.copy {
-			dockerfile += `COPY --from=builder /app/` + copyFile.Dst + ` ` + copyFile.Src + `
+			dockerfile += `COPY --from=builder ` + copyFile.Dst + ` ` + copyFile.Src + `
 `
 		}
 

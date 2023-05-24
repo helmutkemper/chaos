@@ -164,6 +164,15 @@ type containerCommon struct {
 	// Flag indicating the need to assemble a standard Dockerfile automatically, complete options
 	makeDefaultDockerfileExtras bool
 
+	// Define work dir. e.g. /app (Dockerfile: WORKDIR /app)
+	makeDefaultDockerfileWorkDir string
+
+	// Define the destination and source files for go build command e.g. SetGolangSrc("/app/main", "/app/main.go"): RUN go build -ldflags="-w -s" -o (dst) /app/main (src) /app/main.go
+	makeDefaultDockerfileBuildDst string
+
+	// Define the destination and source files for go build command e.g. SetGolangSrc("/app/main", "/app/main.go"): RUN go build -ldflags="-w -s" -o (dst) /app/main (src) /app/main.go
+	makeDefaultDockerfileBuildSrc string
+
 	// fixme: a cache da versão antiga funciona
 	enableCache bool
 
@@ -231,6 +240,24 @@ type containerCommon struct {
 
 type ContainerFromImage struct {
 	containerCommon
+}
+
+// DockerfileBuild
+//
+// workDir: Define work dir.  e.g. /app (Dockerfile: WORKDIR /app)
+// dst: Define the destination and source files for go build command e.g. SetGolangSrc("/app/main", "/app/main.go"): RUN go build -ldflags="-w -s" -o (dst) /app/main (src) /app/main.go
+// src: Define the destination and source files for go build command e.g. SetGolangSrc("/app/main", "/app/main.go"): RUN go build -ldflags="-w -s" -o (dst) /app/main (src) /app/main.go
+func (el *ContainerFromImage) DockerfileBuild(workDir, dst, src string) (ref *ContainerFromImage) {
+	// Define work dir. e.g. /app (Dockerfile: WORKDIR /app)
+	el.makeDefaultDockerfileWorkDir = workDir
+
+	// Define the destination and source files for go build command e.g. SetGolangSrc("/app/main", "/app/main.go"): RUN go build -ldflags="-w -s" -o (dst) /app/main (src) /app/main.go
+	el.makeDefaultDockerfileBuildDst = dst
+
+	// Define the destination and source files for go build command e.g. SetGolangSrc("/app/main", "/app/main.go"): RUN go build -ldflags="-w -s" -o (dst) /app/main (src) /app/main.go
+	el.makeDefaultDockerfileBuildSrc = src
+
+	return el
 }
 
 // MakeDockerfile
