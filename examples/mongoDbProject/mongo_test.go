@@ -27,7 +27,8 @@ func TestSimpleLinearBasic(t *testing.T) {
 	// Cria toda a infraestrutura necessária para projeto funcionar de forma adequada.
 	primordial := factory.NewPrimordial().
 		// [opcional] Cria uma rede dentro do docker, isolando o teste.
-		//NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1").
+		NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1").
+
 		// [opcional] Permite ao controlador de lixo remover qualquer imagem, rede, volume ou container criado para o teste
 		// [opcional] "mongo:latest" remove a imagem ao final do teste, limpando espaço em disco
 		//            como regra, todos os elementos criados pelo teste contém a palavra `delete` como um identificador de
