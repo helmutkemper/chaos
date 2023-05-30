@@ -16,8 +16,7 @@ import (
 //	  destination: container destination. eg. delete_mongo_0:27017 for MongoDB
 //	  minDelay: min delay in milliseconds for block of 32k bytes. Use 0 for default value
 //	  maxDelay: max delay in milliseconds for block of 32k bytes. Use 0 for default value
-//	  changeRate: percentage value of blocks with damaged values. Values between 0.0 and 1.0 where 0 is disabled and 1.0 is 100%
-func NewContainerNetworkProxy(containerName string, localPort int64, destination string, minDelay, maxDelay int64, changeRate float64) (reference *manager.ContainerFromImage) {
+func NewContainerNetworkProxy(containerName string, localPort int64, destination string, minDelay, maxDelay int64) (reference *manager.ContainerFromImage) {
 
 	localPortString := ":" + strconv.FormatInt(localPort, 10)
 	environmentVars := make([]string, 0)
@@ -26,9 +25,6 @@ func NewContainerNetworkProxy(containerName string, localPort int64, destination
 	}
 	if maxDelay != 0 {
 		environmentVars = append(environmentVars, "CHAOS_NETWORK_MAX_DELAY="+strconv.FormatInt(maxDelay, 10))
-	}
-	if changeRate != 0 {
-		environmentVars = append(environmentVars, "CHAOS_NETWORK_MAX_DELAY="+strconv.FormatFloat(changeRate, 'g', -1, 64))
 	}
 	environmentVars = append(environmentVars, "CHAOS_NETWORK_LOCAL_PORT="+localPortString)
 	environmentVars = append(environmentVars, "CHAOS_NETWORK_REMOTE_CONTAINER="+destination)
