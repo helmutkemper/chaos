@@ -27,13 +27,12 @@ func TestSimpleLinearBasic(t *testing.T) {
 	// Cria toda a infraestrutura necessária para projeto funcionar de forma adequada.
 	primordial := factory.NewPrimordial().
 		// [opcional] Cria uma rede dentro do docker, isolando o teste.
+		//            Porém, se torna obrigatório se você que quer usar a funcionalidade de host name para conexão pelo nome do container
 		NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1").
 
-		// [opcional] Permite ao controlador de lixo remover qualquer imagem, rede, volume ou container criado para o teste
+		// [opcional] Permite ao controlador de lixo remover qualquer imagem, rede, volume ou container criado para o teste, tanto no início do teste quanto no fim do teste
 		// [opcional] "mongo:latest" remove a imagem ao final do teste, limpando espaço em disco
-		//            como regra, todos os elementos criados pelo teste contém a palavra `delete` como um identificador de
-		//            algo criado para o teste, porém, você pode passar nomes de elementos docker criados para o teste que
-		// serão removidos ao final do teste
+		//            Como regra, todos os elementos criados pelo teste contém a palavra `delete` como um identificador de algo criado para o teste, porém, você pode passar nomes de elementos docker criados para o teste que serão removidos ao final do teste
 		Test(t, "mongo:latest")
 
 	// Fábrica de container baseado em uma imagem existente
@@ -41,8 +40,13 @@ func TestSimpleLinearBasic(t *testing.T) {
 		"mongo:latest",
 	).
 		// [opcional] Determina uma ou mais portas a serem expostas na rede
+		//            Regra: use uma linha por porta e uma porta por container.
+		//            Por exemplo: para três containers com as porta 27017 exposta nas portas 27016, 27017 e 27018, use:
+		//            Ports("tcp", 27017, 27016, 27017, 27018).
+		//            Caso necessite expor mais de uma porta, por exemplo, a porta 27018, a porta usada para replicação secundária, repita o comando Ports("tcp", 27018, ..., ...).
 		Ports("tcp", 27017, 27017).
-		// [opcional] Segue o manual do MongoDB e libera conexão de qualquer endereço
+
+		// [opcional] Libera conexão de qualquer endereço
 		EnvironmentVar([]string{"--bind_ip_all"}).
 
 		// [opcional] permite gravar os dados do MongoDB em pasta local
