@@ -156,7 +156,10 @@ type containerCommon struct {
 	failLogsLastSize []int
 
 	// Lista de environment variables from container
-	environment [][]string
+	environment       [][]string
+	containerCommand  [][]string
+	containerShell    [][]string
+	containerHostname []string
 
 	// Flag indicating the need to assemble a standard Dockerfile automatically
 	makeDefaultDockerfile bool
@@ -451,12 +454,16 @@ func (el *ContainerFromImage) OnBuild(onBuild ...string) (ref *ContainerFromImag
 // HostName
 //
 // Defines the hostname of the container
-func (el *ContainerFromImage) HostName(name string) (ref *ContainerFromImage) {
+func (el *ContainerFromImage) HostName(hostname ...string) (ref *ContainerFromImage) {
 	if monitor.Err {
 		return el
 	}
 
-	el.manager.DockerSys[0].Config.Hostname = name
+	if hostname == nil {
+		return el
+	}
+
+	el.containerHostname = hostname
 	return el
 }
 
@@ -547,7 +554,6 @@ func (el *ContainerFromImage) EnvironmentVar(env ...[]string) (ref *ContainerFro
 	}
 
 	if len(env) == 0 {
-		env = nil
 		return el
 	}
 
@@ -558,16 +564,17 @@ func (el *ContainerFromImage) EnvironmentVar(env ...[]string) (ref *ContainerFro
 // Cmd
 //
 // Command to run when starting the container
-func (el *ContainerFromImage) Cmd(cmd ...string) (ref *ContainerFromImage) {
+func (el *ContainerFromImage) Cmd(cmd ...[]string) (ref *ContainerFromImage) {
 	if monitor.Err {
 		return el
 	}
 
 	if len(cmd) == 0 {
-		cmd = nil
+		return el
 	}
 
-	el.manager.DockerSys[0].Config.Cmd = cmd
+	//el.manager.DockerSys[0].Config.Cmd = cmd
+	el.containerCommand = cmd
 	return el
 }
 
@@ -675,16 +682,17 @@ func (el *ContainerFromImage) StopTimeout(timeout time.Duration) (ref *Container
 // Shell
 //
 // Shell for shell-form of RUN, CMD, ENTRYPOINT
-func (el *ContainerFromImage) Shell(shell ...string) (ref *ContainerFromImage) {
+func (el *ContainerFromImage) Shell(shell ...[]string) (ref *ContainerFromImage) {
 	if monitor.Err {
 		return el
 	}
 
 	if len(shell) == 0 {
-		shell = nil
+		return
 	}
 
-	el.manager.DockerSys[0].Config.Shell = shell
+	//el.manager.DockerSys[0].Config.Shell = shell
+	el.containerShell = shell
 	return el
 }
 
@@ -841,6 +849,11 @@ func (el *ContainerFromImage) DetachMonitor() (ref *ContainerFromImage) {
 //	    Therefore, the correct way to execute the command in container 0 will be:
 //	    Command(0, "/bin/ash", "-c", "/root/osv-scanner --json -r /scan > /report/report.json")
 func (el *ContainerFromImage) Command(key int, command ...string) (exitCode int, running bool, stdOutput []byte, stdError []byte, err error) {
+	if key >= len(el.manager.DockerSys) {
+		err = fmt.Errorf("key %v is greater than total containers created, %v", key, len(el.manager.DockerSys))
+		return
+	}
+
 	return el.manager.DockerSys[key].ContainerExecCommand(el.manager.Id[key], command)
 }
 
@@ -1839,6 +1852,8 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 		// map the port container:host[copiesKey]
 		var portConfig = el.mapContainerPorts(iCopy)
 		var volumes = el.mapVolumes(iCopy)
+		var iCopyString = strconv.FormatInt(int64(iCopy), 10)
+		var containerNameFormatted = containerName + "_" + iCopyString
 
 		config.Image = el.imageName
 
@@ -1851,11 +1866,37 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 			config.Env = nil
 		}
 
+		// todo: documentar isto
+		if len(el.containerCommand) > iCopy {
+			config.Cmd = el.containerCommand[iCopy]
+		} else if len(el.containerCommand) == 1 {
+			config.Cmd = el.containerCommand[0]
+		} else {
+			config.Cmd = nil
+		}
+
+		// todo: documentar isto
+		if len(el.containerShell) > iCopy {
+			config.Shell = el.containerShell[iCopy]
+		} else if len(el.containerShell) == 1 {
+			config.Shell = el.containerShell[0]
+		} else {
+			config.Shell = nil
+		}
+
+		// todo: documentar isto
+		if len(el.containerHostname) > iCopy {
+			config.Hostname = el.containerHostname[iCopy]
+		} else if len(el.containerHostname) == 1 {
+			config.Hostname = el.containerHostname[0]
+		} else {
+			config.Hostname = containerNameFormatted
+		}
+
 		// create the container, link container and network, but, don't start the container
 		var warnings []string
 		var id string
-		var iCopyString = strconv.FormatInt(int64(iCopy), 10)
-		var containerNameFormatted = containerName + "_" + iCopyString
+
 		id, warnings, err = el.manager.DockerSys[iCopy].ContainerCreateWithConfig(
 			config,
 			containerNameFormatted,

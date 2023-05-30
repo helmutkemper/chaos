@@ -60,11 +60,21 @@ func (el *Primordial) NetworkCreate(name, subnet, gateway string) (ref *Primordi
 func (el *Primordial) Monitor(duration time.Duration) (pass bool) {
 	var timer = time.NewTimer(duration)
 	go func() {
-		<-timer.C
+		select {
+		case <-timer.C:
+		case <-el.manager.DoneCh:
+		}
 		monitor.EndAll()
 	}()
 
 	return monitor.Monitor()
+}
+
+// Done
+//
+// End of test before requested time
+func (el *Primordial) Done() {
+	el.manager.DoneCh <- struct{}{}
 }
 
 // GetLastError
