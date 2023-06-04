@@ -27,6 +27,19 @@ func NewContainerNetworkProxy(containerName string, config []ProxyConfig) (refer
 
 	envFinal := make([][]string, 0)
 	for _, conf := range config {
+
+		if conf.MinDelay == 0 {
+			conf.MinDelay += 1
+		}
+
+		if conf.MaxDelay == 0 {
+			conf.MaxDelay += 1
+		}
+
+		if conf.MinDelay == conf.MaxDelay {
+			conf.MaxDelay += 1
+		}
+
 		localPortString := ":" + strconv.FormatInt(conf.LocalPort, 10)
 		environmentVars := make([]string, 0)
 		if conf.MinDelay != 0 {
@@ -49,7 +62,7 @@ func NewContainerNetworkProxy(containerName string, config []ProxyConfig) (refer
 	).
 		//EnvironmentVar(environmentVars).
 		EnvironmentVar(envFinal...).
-		//Ports("tcp", localPort, localPort).
+		Ports("tcp", config[0].LocalPort, config[0].LocalPort).
 		MakeDockerfile().
 		Create(containerName, len(config)).
 		Start()
