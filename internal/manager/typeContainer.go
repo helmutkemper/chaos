@@ -27,6 +27,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -1517,7 +1518,14 @@ func (el *ContainerFromImage) logsCleaner(logs []byte, key int) (logsLine [][]by
 	logs = logs[el.failLogsLastSize[key]:]
 	el.failLogsLastSize[key] = size
 
-	logs = bytes.ReplaceAll(logs, []byte("\r"), []byte(""))
+	for i := 0; i != 32; i += 1 {
+		if i == 10 {
+			continue
+		}
+
+		logs = bytes.ReplaceAll(logs, []byte{uint8(i)}, []byte(""))
+	}
+
 	return bytes.Split(logs, []byte("\n"))
 }
 
@@ -1539,11 +1547,11 @@ func (el *ContainerFromImage) logsSearchAndReplaceIntoText(key int, logs *[]byte
 						return
 					}
 					var totalOfFiles = strconv.Itoa(len(dirList))
-					var path = filepath.Join(pathLog, el.containerName+"_"+strconv.FormatInt(int64(key), 10)+"."+totalOfFiles+".fail.log")
-					err = ioutil.WriteFile(path, *logs, fs.ModePerm)
+					var join = filepath.Join(pathLog, el.containerName+"_"+strconv.FormatInt(int64(key), 10)+"."+totalOfFiles+".fail.log")
+					err = ioutil.WriteFile(join, *logs, fs.ModePerm)
 					if err != nil {
 						monitor.Err = true
-						ErrorCh <- fmt.Errorf("container.logsSearchAndReplaceIntoText().ioutil.WriteFile(%v).error: %v", path, err)
+						ErrorCh <- fmt.Errorf("container.logsSearchAndReplaceIntoText().ioutil.WriteFile(%v).error: %v", join, err)
 						return
 					}
 				}
@@ -1827,6 +1835,7 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 
 	var ipAddress string
 	var netConfig *networkTypes.NetworkingConfig
+	var re = regexp.MustCompile(`_[0-9]+$`)
 	el.IPV4Address = make([]string, 0)
 	for iCopy := 0; iCopy != copies; iCopy += 1 {
 
@@ -1853,7 +1862,11 @@ func (el *ContainerFromImage) Create(containerName string, copies int) (ref *Con
 		var portConfig = el.mapContainerPorts(iCopy)
 		var volumes = el.mapVolumes(iCopy)
 		var iCopyString = strconv.FormatInt(int64(iCopy), 10)
-		var containerNameFormatted = containerName + "_" + iCopyString
+
+		var containerNameFormatted string
+		if !re.MatchString(containerName) {
+			containerNameFormatted = containerName + "_" + iCopyString
+		}
 
 		config.Image = el.imageName
 

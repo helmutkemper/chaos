@@ -1,9 +1,14 @@
 package manager
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/helmutkemper/chaos/internal/monitor"
 	"github.com/helmutkemper/chaos/internal/standalone"
+	"io/fs"
+	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -15,8 +20,95 @@ type Primordial struct {
 	manager *Manager
 }
 
-func (el *Primordial) Test(t *testing.T, names ...string) (ref *Primordial) {
+func (el *Primordial) getLogs(id string) (log []byte, err error) {
+	log, err = el.manager.DockerSys[0].ContainerLogs(id)
+	if err != nil {
+		return
+	}
+
+	logCopy := make([]byte, len(log))
+	copy(logCopy, log)
+
+	// Remove non-printable characters
+	for i := 0; i != 32; i += 1 {
+		if i == 10 {
+			continue
+		}
+
+		log = bytes.ReplaceAll(log, []byte{uint8(i)}, []byte(""))
+	}
+
+	for {
+		log = bytes.ReplaceAll(log, []byte("\n\n"), []byte(""))
+		if bytes.Equal(log, logCopy) {
+			break
+		}
+
+		logCopy = make([]byte, len(log))
+		copy(logCopy, log)
+	}
+
+	return
+}
+
+func (el *Primordial) Test(t *testing.T, pathToSave string, names ...string) (ref *Primordial) {
+	var log []byte
+
+	err := os.MkdirAll(pathToSave, fs.ModePerm)
+	if err != nil {
+		ErrorCh <- fmt.Errorf("primordial.Test().error: %v", err)
+		return el
+	}
+
 	t.Cleanup(func() {
+
+		// Saves contents of containers before deleting
+		containers, err := el.manager.DockerSys[0].ContainerListAll()
+		if err != nil {
+			ErrorCh <- fmt.Errorf("primordial.NetworkCreate().error: %v", err)
+			return
+		}
+
+		for _, container := range containers {
+			if len(container.Names) == 0 {
+				continue
+			}
+
+			if strings.Contains(container.Names[0], "delete") {
+				log, err = el.getLogs(container.ID)
+				if err != nil {
+					ErrorCh <- fmt.Errorf("primordial.Test().error: %v", err)
+					return
+				}
+
+				pathAbs, err := filepath.Abs(pathToSave)
+				if err != nil {
+					ErrorCh <- fmt.Errorf("primordial.Test().error: %v", err)
+					return
+				}
+
+				pathData := path.Join(pathAbs, container.Names[0]+".log")
+				err = os.WriteFile(pathData, log, fs.ModePerm)
+				if err != nil {
+					ErrorCh <- fmt.Errorf("primordial.Test().error: %v", err)
+					return
+				}
+			}
+
+			for _, name := range names {
+				if strings.Contains(container.Names[0], name) {
+					log, err = el.getLogs(container.ID)
+					if err != nil {
+						ErrorCh <- fmt.Errorf("primordial.Test().error: %v", err)
+						return
+					}
+
+					pathData := path.Join(pathToSave, container.Names[0]+".log")
+					err = os.WriteFile(pathData, log, fs.ModePerm)
+				}
+			}
+		}
+
 		el.GarbageCollector(names...)
 	})
 

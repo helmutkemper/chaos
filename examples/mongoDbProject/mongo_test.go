@@ -15,25 +15,58 @@ import (
 	"time"
 )
 
-// Este é um exemplo de como instalar um container baseado em imagem e foi escrito seguindo a regra do programador cansado.
+// English:
+// These are examples of how to use the golang test framework to create complex tests simulating network and
+// infrastructure failures, simulating a compromised production environment with random failures.
+//
+// TestSimpleLinearBasic: Test example with basic information on how to install a container based on a docker image
+//
+// TestLinearNetworkWithProblems: Example of creating a compromised network on a database connection
+//
+// TestSimpleLinearComplex: Example of creating a database with replication and passing shell commands to the container
+//
+// TestSimpleChaosComplex: Example of how to simulate a MongoDB structure with a failing replica set and compromised
+// network
 
-// No primeiro exemplo, você encontrará informações básicas para suas necessidades, porém, no exemplo abaixo, será adicionada mais informações para ser usada em um projeto complexo
+// Português:
+// Estes são exemplos de como usar a estrutura de teste do golang para criar testes complexos simulando falhas de rede
+// e de infraestrutura, simulando um ambiente de produção comprometido, com falhas aleatórias.
+
+//
+// TestSimpleLinearBasic: Exemplo de teste com as informações básicas de como instalar um container baseado em imagem docker
+
+// TestLinearNetworkWithProblems: Exemplo de como criar uma rede com problemas em uma conexão de banco de dados
+
+// TestSimpleLinearComplex: Exemplo de como criar um banco de dados com replicação e passar comandos shell para o container
+
+// TestSimpleChaosComplex: Exemplo de como simular uma estrutura MongoDB com replica set falhando e rede comprometida
 
 // TestSimpleLinearBasic cria uma instalação simples do banco de dados MongoDB e a deixa funcionar por três minutos.
 //
 // Nesse exemplo serão mostradas as configurações básicas de como criar um container baseado em imagem e como expor uma porta ao mundo
 func TestSimpleLinearBasic(t *testing.T) {
 
-	// Cria toda a infraestrutura necessária para projeto funcionar de forma adequada.
+	// Objetivo do exemplo: Criar um container baseado em imagem e expor a porta 27017
+	//
+	// +-------------+             +-------------+
+	// |             |             |             |
+	// | golang code | -> 27017 -> |   MongoDB   |
+	// |             |   (open)    |             |
+	// +-------------+             +-------------+
+	//   172.17.0.1                   10.0.0.2
+
+	// Cria toda a infraestrutura necessária para o projeto funcionar de forma adequada.
 	primordial := factory.NewPrimordial().
-		// [opcional] Cria uma rede dentro do docker, isolando o teste.
-		//            Porém, se torna obrigatório se você que quer usar a funcionalidade de host name para conexão pelo nome do container
+		// NetworkCreate: Cria uma rede dentro do docker, isolando o teste.
+		//                Porém, se torna obrigatório se você que quer usar a funcionalidade de host name para conexão pelo nome do container
 		NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1").
 
-		// [opcional] Permite ao controlador de lixo remover qualquer imagem, rede, volume ou container criado para o teste, tanto no início do teste quanto no fim do teste
-		// [opcional] "mongo:latest" remove a imagem ao final do teste, limpando espaço em disco
-		//            Como regra, todos os elementos criados pelo teste contém a palavra `delete` como um identificador de algo criado para o teste, porém, você pode passar nomes de elementos docker criados para o teste que serão removidos ao final do teste
-		Test(t, "mongo:latest")
+		// Test: [opcional] Permite ao controlador de lixo remover qualquer imagem, rede, volume ou container criado para o teste, tanto no início do teste quanto no final do teste
+		//       t: ponteiro do framework de teste
+		//       pathToSave: Salva, na pasta "./end", a saída padrão de todos os containers removidos no final do teste
+		//       names: [opcional] "mongo:latest" remove a imagem ao final do teste, limpando espaço em disco
+		//              Como regra, todos os elementos criados pelo teste contém a palavra `delete` como um identificador de algo criado para o teste, porém, você pode passar nomes de elementos docker criados para o teste que serão removidos ao final do teste. Cuidado, essa uma busca Contains(docker.element, name)
+		Test(t, "./end", "mongo:latest")
 
 	// Fábrica de container baseado em uma imagem existente
 	factory.NewContainerFromImage(
@@ -131,7 +164,7 @@ func TestSimpleLinearBasic(t *testing.T) {
 	}(t, primordial)
 
 	// Determina o tempo do teste
-	if !primordial.Monitor(3 * time.Minute) {
+	if !primordial.Monitor(30 * time.Minute) {
 		t.Fail()
 	}
 }
@@ -144,7 +177,7 @@ func TestLinearNetworkWithProblems(t *testing.T) {
 
 	primordial := factory.NewPrimordial().
 		NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1").
-		Test(t)
+		Test(t, "./end")
 
 	factory.NewContainerFromImage(
 		"mongo:latest",
@@ -159,15 +192,14 @@ func TestLinearNetworkWithProblems(t *testing.T) {
 	factory.NewContainerNetworkProxy(
 		"delay",
 
-		// Porta local é a porta que sofre conexão externa
-		27016,
-
-		// Destino é sempre o elemento passivo. Por exemplo, o banco de dados sempre recebe conexões, é passivo.
-		// Cuidado quando usar host name, ele só funciona na rede docker quando é criada uma nova rede
-		"delete_mongo_0:27017",
-
-		// O atraso é em milissegundo. Lembre-se que a rede transporta pacotes e cada pacote recebe um valor aleatório entre o mínimo e o máximo.
-		10, 100,
+		[]factory.ProxyConfig{
+			{
+				LocalPort:   27017,
+				Destination: "delete_mongo_0:27017",
+				MinDelay:    10,
+				MaxDelay:    20,
+			},
+		},
 	)
 
 	// Lembre-se, a porta 27017 é a porta original do banco e tem acesso normal, a porta 27016 é a porta da rede com problemas
@@ -243,7 +275,7 @@ func TestSimpleLinearComplex(t *testing.T) {
 		// a criação de rede
 		NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1").
 		// Caso queira continuar usando a imagem "mongo:latest", apenas não coloque o nome dela aqui
-		Test(t)
+		Test(t, "./end")
 
 	mongoDocker := factory.NewContainerFromImage(
 		"mongo:latest",
@@ -429,6 +461,207 @@ func TestSimpleLinearComplex(t *testing.T) {
 
 	// Deixa o projeto rodando por 5 minutos
 	if !primordial.Monitor(5 * time.Minute) {
+		t.Fail()
+	}
+}
+
+func TestSimpleChaosComplex(t *testing.T) {
+
+	primordial := factory.NewPrimordial().
+		// Segundo manual do MongoDB, a replica set só ira funcionar se o hostname for definido, não podendo usar endereço IP
+		// Para que o hostname funcione de forma correta, dentro do docker, deve ser criada uma rede, por isto, não comente a criação de rede
+		NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1").
+
+		// Caso queira continuar usando a imagem "mongo:latest", apenas não coloque o nome dela aqui
+		// A pasta ./end receberá a saída padrão de todos os containers para análise posterior [dados reescritos a cada teste]
+		Test(t, "./end")
+
+	// Estrutura do banco MongoDB com replica set
+	//
+	//           +-------------+
+	//           |             |
+	//           |   arbiter   |
+	//           |   MongoDB   |
+	//           |             |
+	//           +------+------+
+	//                  |
+	//        +---------+---------+
+	//        |                   |
+	// +------+------+     +------+------+
+	// |             |     |             |
+	// |  replica 1  |     |  replica 2  |
+	// |   MongoDB   |     |   MongoDB   |
+	// |             |     |             |
+	// +-------------+     +-------------+
+	//
+	mongoDocker := factory.NewContainerFromImage(
+		"mongo:latest",
+	).
+		// Impede que o MongoDB aceite conexão externa diretamente;
+		// Cada banco aceitará apenas conexão do container "delay" especificado;
+		EnvironmentVar([]string{"bindIp:delete_delay_0"}, []string{"bindIp:delete_delay_1"}, []string{"bindIp:delete_delay_2"}).
+		Cmd([]string{"mongod", "--replSet", "rs0"}).
+		WaitForFlagTimeout("Waiting for connections", 30*time.Second).
+
+		// Cada arquivo receberá um nome único e não serão sobrescritos em um novo teste
+		FailFlag("./bug", "Address already in use", "panic:", "bug:").
+
+		// Habilita o processo de caos
+		EnableChaos(1, 1, 1).
+		Create("mongo", 3).
+		Start()
+
+	var stdOutput []byte
+	var err error
+
+	_, _, stdOutput, _, err = mongoDocker.Command(2, "/bin/bash", "-c", "mongosh 127.0.0.1:27017 --eval \"rs.secondaryOk()\"")
+	if err != nil {
+		t.Logf("mongoDocker.Command().error: %v", err.Error())
+		t.FailNow()
+	}
+
+	if bytes.Contains(stdOutput, []byte("MongoNetworkError:")) || bytes.Contains(stdOutput, []byte("TypeError:")) {
+		t.Logf("container 2: rs.secondaryOk().error: %s", stdOutput)
+		t.FailNow()
+	}
+
+	_, _, stdOutput, _, err = mongoDocker.Command(1, "/bin/bash", "-c", "mongosh 127.0.0.1:27017 --eval \"rs.secondaryOk()\"")
+	if err != nil {
+		t.Logf("mongoDocker.Command().error: %v", err.Error())
+		t.FailNow()
+	}
+
+	if bytes.Contains(stdOutput, []byte("MongoNetworkError:")) || bytes.Contains(stdOutput, []byte("TypeError:")) {
+		t.Logf("container 1: rs.secondaryOk().error: %s", stdOutput)
+		t.FailNow()
+	}
+
+	_, _, stdOutput, _, err = mongoDocker.Command(0, "/bin/bash", "-c", "mongosh 127.0.0.1:27017 --eval \"rs.initiate()\"")
+	if err != nil {
+		t.Logf("mongoDocker.Command().error: %v", err.Error())
+		t.FailNow()
+	}
+
+	if bytes.Contains(stdOutput, []byte("MongoNetworkError:")) || bytes.Contains(stdOutput, []byte("TypeError:")) {
+		t.Logf("container 0: rs.secondaryOk().error: %s", stdOutput)
+		t.FailNow()
+	}
+
+	_, _, stdOutput, _, err = mongoDocker.Command(0, "/bin/bash", "-c", "mongosh 127.0.0.1:27017 --eval \"rs.add(\\\"delete_mongo_1:27017\\\")\"")
+	if err != nil {
+		t.Logf("mongoDocker.Command().error: %v", err.Error())
+		t.FailNow()
+	}
+
+	if bytes.Contains(stdOutput, []byte("MongoNetworkError:")) || bytes.Contains(stdOutput, []byte("TypeError:")) {
+		t.Logf("container 0: rs.secondaryOk().error: %s", stdOutput)
+		t.FailNow()
+	}
+
+	_, _, stdOutput, _, err = mongoDocker.Command(0, "/bin/bash", "-c", "mongosh 127.0.0.1:27017 --eval \"rs.add(\\\"delete_mongo_2:27017\\\")\"")
+	if err != nil {
+		t.Logf("mongoDocker.Command().error: %v", err.Error())
+		t.FailNow()
+	}
+
+	if bytes.Contains(stdOutput, []byte("MongoNetworkError:")) || bytes.Contains(stdOutput, []byte("TypeError:")) {
+		t.Logf("container 0: rs.secondaryOk().error: %s", stdOutput)
+		t.FailNow()
+	}
+
+	_, _, stdOutput, _, err = mongoDocker.Command(0, "/bin/bash", "-c", "mongosh --eval \"rs.status()\"")
+	if err != nil {
+		t.Logf("mongoDocker.Command().error: %v", err.Error())
+		t.FailNow()
+	}
+
+	if !bytes.Contains(stdOutput, []byte("'rs0'")) || !bytes.Contains(stdOutput, []byte("'delete_mongo_0:27017'")) || !bytes.Contains(stdOutput, []byte("'delete_mongo_1:27017'")) || !bytes.Contains(stdOutput, []byte("'delete_mongo_2:27017'")) {
+		t.Logf("replica set, setup failed")
+		t.FailNow()
+	}
+
+	// Nesse ponto do projeto, a replica set de MongoDB foi configurada com dados efêmeros e está em uma rede docker, mas, a replica set, por regra do MongoDB, só aceita conexão via host name, e host name só funciona na rede docker, por isto o teste deve ser feito em container
+
+	// Estrutura de rede em teste de caos/falha completa                                Log container                        | Log events
+	//                                                                                  -------------------------------------+--------------------------------------------------
+	//                      +-------------+     +-------------+      +-------------+    03/06/2023 19:14:04: inserted 175000 |
+	//                      |             |     |             |      |   control   |    03/06/2023 19:14:06: inserted 176000 |
+	//                  +-> |    proxy    | --> |   MongoDB   | <-+- |      of     |    03/06/2023 19:14:07: inserted 177000 |
+	//                  |   |             |     |             |   |  |    chaos    |    03/06/2023 19:14:08: inserted 178000 |
+	//                  |   +-------------+     +-------------+   |  +-------------+    no data                              | 03/06/2023 19:14:09: pause(): delete_mongo_0
+	//                  |   delete_delay_0      delete_mongo_0    |                     no data                              |
+	//                  |                                         |                     no data                              | 03/06/2023 19:15:16: unpause(): delete_mongo_0
+	// +-------------+  |   +-------------+     +-------------+   |                     03/06/2023 19:15:17: inserted 179000 |
+	// |             |  |   |             |     |             |   |                     03/06/2023 19:15:18: inserted 180000 |
+	// | golang code | -+-> |    proxy    | --> |   MongoDB   | <-+
+	// |             |  |   |             |     |             |   |                     See the example log:
+	// +-------------+  |   +-------------+     +-------------+   |                     The log shows MongoDB saving a block of a thousand individual inserts once or twice a second;
+	//                  |   delete_delay_1      delete_mongo_1    |                     The first failure happened at 19:12:05 (pause(): delete_mongo_2) and lasted until 19:14:09;
+	//                  |                                         |                     The number of saved blocks remains the same, even with a stopped secondary replica;
+	//                  |   +-------------+     +-------------+   |                     The second failure happened at 19:14:09 (pause(): delete_mongo_0) and lasted until 19:15:16, however delete_mongo_0 is the "arbiter" bank;
+	//                  |   |             |     |             |   |                     The log shows the last block being saved at "03/06/2023 19:14:08: inserted 178000" and then jumps to "03/06/2023 19:15:17: inserted 179000";
+	//                  +-> |    proxy    | --> |   MongoDB   | <-+                     Therefore, the replica set was stopped until the event "unpause(): delete_mongo_0" at 19:15:16, therefore, the replica set is limited by the arbiter bank.
+	//                      |             |     |             |
+	//                      +-------------+     +-------------+                         The standard output of the "delete_mongodbClient_0.log" container will be automatically saved in the ".end" folder
+	//                      delete_delay_2      delete_mongo_2                          The pause/stop events will be shown in the standard output of go
+	factory.NewContainerNetworkProxy(
+		"delay",
+
+		// Uma configuração para cada container proxy
+		[]factory.ProxyConfig{
+			{
+				// Porta de entrada do mundo externo
+				LocalPort: 27017,
+				// Conexão com elemento passivo, nesse caso, o MongoDB
+				Destination: "delete_mongo_0:27017",
+
+				// Tempo mínimo e máximo para atraso entre pacotes
+				MinDelay: 1,
+				MaxDelay: 1000000,
+			},
+			{
+				// Porta de entrada do mundo externo
+				LocalPort: 27017,
+				// Conexão com elemento passivo, nesse caso, o MongoDB
+				Destination: "delete_mongo_1:27017",
+
+				// Tempo mínimo e máximo para atraso entre pacotes
+				MinDelay: 1,
+				MaxDelay: 100,
+			},
+			{
+				// Porta de entrada do mundo externo
+				LocalPort: 27017,
+				// Conexão com elemento passivo, nesse caso, o MongoDB
+				Destination: "delete_mongo_2:27017",
+
+				// Tempo mínimo e máximo para atraso entre pacotes
+				MinDelay: 1,
+				MaxDelay: 100,
+			},
+		},
+	)
+
+	// Container com o projeto de teste arquivado em uma pasta local, "./mongodbClient"
+	factory.NewContainerFromFolder(
+		"folder:latest",
+		"./mongodbClient",
+	).
+		// Passar a conexão por environment var deixa o código mais organizado
+		EnvironmentVar(
+			[]string{
+				"CONNECTION_STRING=mongodb://delete_delay_0:27017,delete_delay_1:27017,delete_delay_2:27017/?replicaSet=rs0",
+			},
+		).
+		// Monta o dockerfile de forma automática
+		MakeDockerfile().
+		// Espera o container rodar
+		WaitForFlagTimeout("container is running", 10*time.Second).
+		FailFlag("./bug", "panic:").
+		Create("mongodbClient", 1).
+		Start()
+
+	if !primordial.Monitor(10 * time.Minute) {
 		t.Fail()
 	}
 }

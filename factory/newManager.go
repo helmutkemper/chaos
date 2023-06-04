@@ -6,6 +6,13 @@ import (
 	"strconv"
 )
 
+type ProxyConfig struct {
+	LocalPort   int64
+	Destination string
+	MinDelay    int64
+	MaxDelay    int64
+}
+
 // NewContainerNetworkProxy
 //
 // Create a container with a proxy simulating a slow network.
@@ -16,18 +23,23 @@ import (
 //	  destination: container destination. eg. delete_mongo_0:27017 for MongoDB
 //	  minDelay: min delay in milliseconds for block of 32k bytes. Use 0 for default value
 //	  maxDelay: max delay in milliseconds for block of 32k bytes. Use 0 for default value
-func NewContainerNetworkProxy(containerName string, localPort int64, destination string, minDelay, maxDelay int64) (reference *manager.ContainerFromImage) {
+func NewContainerNetworkProxy(containerName string, config []ProxyConfig) (reference *manager.ContainerFromImage) {
 
-	localPortString := ":" + strconv.FormatInt(localPort, 10)
-	environmentVars := make([]string, 0)
-	if minDelay != 0 {
-		environmentVars = append(environmentVars, "CHAOS_NETWORK_MIN_DELAY="+strconv.FormatInt(minDelay, 10))
+	envFinal := make([][]string, 0)
+	for _, conf := range config {
+		localPortString := ":" + strconv.FormatInt(conf.LocalPort, 10)
+		environmentVars := make([]string, 0)
+		if conf.MinDelay != 0 {
+			environmentVars = append(environmentVars, "CHAOS_NETWORK_MIN_DELAY="+strconv.FormatInt(conf.MinDelay, 10))
+		}
+		if conf.MaxDelay != 0 {
+			environmentVars = append(environmentVars, "CHAOS_NETWORK_MAX_DELAY="+strconv.FormatInt(conf.MaxDelay, 10))
+		}
+		environmentVars = append(environmentVars, "CHAOS_NETWORK_LOCAL_PORT="+localPortString)
+		environmentVars = append(environmentVars, "CHAOS_NETWORK_REMOTE_CONTAINER="+conf.Destination)
+
+		envFinal = append(envFinal, environmentVars)
 	}
-	if maxDelay != 0 {
-		environmentVars = append(environmentVars, "CHAOS_NETWORK_MAX_DELAY="+strconv.FormatInt(maxDelay, 10))
-	}
-	environmentVars = append(environmentVars, "CHAOS_NETWORK_LOCAL_PORT="+localPortString)
-	environmentVars = append(environmentVars, "CHAOS_NETWORK_REMOTE_CONTAINER="+destination)
 
 	ref := new(manager.Manager)
 	ref.New()
@@ -35,10 +47,11 @@ func NewContainerNetworkProxy(containerName string, localPort int64, destination
 		"delay",
 		"https://github.com/helmutkemper/chaos.network.git",
 	).
-		EnvironmentVar(environmentVars).
-		Ports("tcp", localPort, localPort).
+		//EnvironmentVar(environmentVars).
+		EnvironmentVar(envFinal...).
+		//Ports("tcp", localPort, localPort).
 		MakeDockerfile().
-		Create(containerName, 1).
+		Create(containerName, len(config)).
 		Start()
 }
 
