@@ -7,13 +7,18 @@ import (
 	"time"
 )
 
+// This example tests the behavior of the MongoDB replica set when an instance fails in production
+// In case you skipped the previous explanation, it contains the basic knowledge of using the system. More information
+// is added here.
+//
+// This example shows how to use random crashes on instances and simulate network issues
 func TestComplexChaos(t *testing.T) {
 
 	primordial := factory.NewPrimordial().
 		NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1").
 		Test(t, "./end")
 
-	// Estrutura do banco MongoDB com replica set
+	// MongoDB database structure with replica set
 	//
 	//           +-------------+
 	//           |             |
@@ -34,16 +39,20 @@ func TestComplexChaos(t *testing.T) {
 	mongoDocker := factory.NewContainerFromImage(
 		"mongo:latest",
 	).
-		// Impede que o MongoDB aceite conexão externa diretamente;
-		// Cada banco aceitará apenas conexão do container "delay" especificado;
+		// Prevents MongoDB from accepting external connection directly;
+		// Each bank will only accept connections from the specified "delete_delay_x" container;
 		EnvironmentVar([]string{"bindIp:delete_delay_0"}, []string{"bindIp:delete_delay_1"}, []string{"bindIp:delete_delay_2"}).
 		Cmd([]string{"mongod", "--replSet", "rs0"}).
 		WaitForFlagTimeout("Waiting for connections", 30*time.Second).
 
-		// Cada arquivo receberá um nome único e não serão sobrescritos em um novo teste
+		// Save container standard output on failure
+		// Each file will be given a unique name and will not be overwritten in a new test
 		FailFlag("./bug", "Address already in use", "panic:", "bug:").
 
-		// Habilita o processo de caos
+		// Enables the chaos process
+		// Maximum number of stopped containers: 1
+		// Maximum number of paused containers: 1
+		// Maximum number of stopped and paused containers: 1
 		EnableChaos(1, 1, 1).
 		Create("mongo", 3).
 		Start()
@@ -117,9 +126,11 @@ func TestComplexChaos(t *testing.T) {
 		t.FailNow()
 	}
 
-	// Nesse ponto do projeto, a replica set de MongoDB foi configurada com dados efêmeros e está em uma rede docker, mas, a replica set, por regra do MongoDB, só aceita conexão via host name, e host name só funciona na rede docker, por isto o teste deve ser feito em container
+	// At this point in the project, the MongoDB replica set has been configured with ephemeral data and is on a docker
+	// network, but the replica set, by MongoDB rule, only accepts connection via host name, and host name only works on
+	// the docker network, for this test must be done in container
 
-	// Estrutura de rede em teste de caos/falha completa                                Log container                        | Log events
+	// Network structure in chaos/failure test                                          Log container                        | Log events
 	//                                                                                  -------------------------------------+--------------------------------------------------
 	//                      +-------------+     +-------------+      +-------------+    03/06/2023 19:14:04: inserted 175000 |
 	//                      |             |     |             |      |   control   |    03/06/2023 19:14:06: inserted 176000 |
@@ -160,55 +171,55 @@ func TestComplexChaos(t *testing.T) {
 	factory.NewContainerNetworkProxy(
 		"delay",
 
-		// Uma configuração para cada container proxy
+		// One configuration for each proxy container
 		[]factory.ProxyConfig{
 			{
-				// Porta de entrada do mundo externo
+				// Gateway to the outside world
 				LocalPort: 27017,
-				// Conexão com elemento passivo, nesse caso, o MongoDB
+				// Connection with passive element, in this case MongoDB
 				Destination: "delete_mongo_0:27017",
 
-				// Tempo mínimo e máximo para atraso entre pacotes
+				// Minimum and maximum time for delay between packets
 				MinDelay: 1,
 				MaxDelay: 1000000,
 			},
 			{
-				// Porta de entrada do mundo externo
+				// Gateway to the outside world
 				LocalPort: 27017,
-				// Conexão com elemento passivo, nesse caso, o MongoDB
+				// Connection with passive element, in this case MongoDB
 				Destination: "delete_mongo_1:27017",
 
-				// Tempo mínimo e máximo para atraso entre pacotes
+				// Minimum and maximum time for delay between packets
 				MinDelay: 1,
 				MaxDelay: 100,
 			},
 			{
-				// Porta de entrada do mundo externo
+				// Gateway to the outside world
 				LocalPort: 27017,
-				// Conexão com elemento passivo, nesse caso, o MongoDB
+				// Connection with passive element, in this case MongoDB
 				Destination: "delete_mongo_2:27017",
 
-				// Tempo mínimo e máximo para atraso entre pacotes
+				// Minimum and maximum time for delay between packets
 				MinDelay: 1,
 				MaxDelay: 100,
 			},
 		},
 	)
 
-	// Container com o projeto de teste arquivado em uma pasta local, "./mongodbClient"
+	// Container with test project archived in a local folder, "./mongodbClient"
 	factory.NewContainerFromFolder(
 		"folder:latest",
 		"./mongodbClient",
 	).
-		// Passar a conexão por environment var deixa o código mais organizado
+		// Passing the connection through environment var makes the code more organized
 		EnvironmentVar(
 			[]string{
 				"CONNECTION_STRING=mongodb://delete_delay_0:27017,delete_delay_1:27017,delete_delay_2:27017/?replicaSet=rs0",
 			},
 		).
-		// Monta o dockerfile de forma automática
+		// Mount the dockerfile automatically
 		MakeDockerfile().
-		// Espera o container rodar
+		// Wait for the container to run
 		WaitForFlagTimeout("container is running", 10*time.Second).
 		FailFlag("./bug", "panic:").
 		Create("mongodbClient", 1).
