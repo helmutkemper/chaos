@@ -25,7 +25,7 @@ type ProxyConfig struct {
 //		  minDelay: min delay in milliseconds for block of 32k bytes. Use 0 for default value
 //		  maxDelay: max delay in milliseconds for block of 32k bytes. Use 0 for default value
 //
-//	    |---------------------------- NORMAL NETWORK ---------------|
+//	    |---------------------- NORMAL NETWORK --------------------|
 //	     /¯¯¯¯¯¯¯¯¯¯¯\  /¯¯¯¯¯¯¯¯¯¯¯\  /¯¯¯¯¯¯¯¯¯¯¯\  /¯¯¯¯¯¯¯¯¯¯¯\
 //	    |             ||             ||             ||             |
 //	     \___________/  \___________/  \___________/  \___________/
