@@ -72,7 +72,7 @@ func TestContainerFromImage_Primordial(t *testing.T) {
 
 	mongodb := &Manager{}
 	mongodb.New()
-	mongodb.ContainerFromImage("mongo:latest").
+	mongodb.ContainerFromImage("mongo:6.0.6").
 		SaveStatistics("../../").
 		EnableChaos(1, 1, 2).
 		Ports("tcp", 27017, 27016, 27015, 27014).

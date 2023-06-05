@@ -17,10 +17,10 @@ func TestLinearNetworkWithProblems(t *testing.T) {
 
 	primordial := factory.NewPrimordial().
 		NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1").
-		Test(t)
+		Test(t, "./end")
 
 	factory.NewContainerFromImage(
-		"mongo:latest",
+		"mongo:6.0.6",
 	).
 		// Limita a origem de conexão ao MongoDB
 		EnvironmentVar([]string{"bindIp:delete_delay_0"}).
@@ -31,15 +31,19 @@ func TestLinearNetworkWithProblems(t *testing.T) {
 	factory.NewContainerNetworkProxy(
 		"delay",
 
-		// Porta local é a porta que sofre conexão externa
-		27016,
+		// Uma configuração para cada container proxy
+		[]factory.ProxyConfig{
+			{
+				// Porta de entrada do mundo externo
+				LocalPort: 27016,
+				// Conexão com elemento passivo, nesse caso, o MongoDB
+				Destination: "delete_mongo_0:27017",
 
-		// Destino é sempre o elemento passivo. Por exemplo, o banco de dados sempre recebe conexões, é passivo.
-		// Cuidado quando usar host name, ele só funciona na rede docker quando é criada uma nova rede
-		"delete_mongo_0:27017",
-
-		// O atraso é em milissegundo. Lembre-se que a rede transporta pacotes e cada pacote recebe um valor aleatório entre o mínimo e o máximo.
-		10, 100,
+				// Tempo mínimo e máximo para atraso entre pacotes
+				MinDelay: 1,
+				MaxDelay: 100,
+			},
+		},
 	)
 
 	// Lembre-se, a porta 27017 é a porta original do banco e tem acesso normal, a porta 27016 é a porta da rede com problemas

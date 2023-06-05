@@ -42,15 +42,15 @@ func Test01SimpleProjectFromImage(t *testing.T) {
 		//       t: test framework pointer
 		//       pathToSave: Saves, in the "./end" folder, the standard output of all containers removed at the end of the
 		//       test
-		//       names: [optional] "mongo:latest" removes the image at the end of the test, cleaning up disk space
+		//       names: [optional] "mongo:6.0.6" removes the image at the end of the test, cleaning up disk space
 		//              As a rule, all elements created by the test contain the word `delete` as an identifier of something
 		//              created for the test, however, you can pass names of docker elements created for the test that will
 		//              be removed at the end of the test. Beware, this is a Contains(docker.element, name) search function
-		Test(t, "./end", "mongo:latest")
+		Test(t, "./end", "mongo:6.0.6")
 
 	// Container factory based on an existing image
 	factory.NewContainerFromImage(
-		"mongo:latest",
+		"mongo:6.0.6",
 	).
 		// [optional] Determines one or more ports to be exposed on the network
 		//            Rule: use one line per port and one port per container.
@@ -79,7 +79,7 @@ func Test01SimpleProjectFromImage(t *testing.T) {
 	// When the standard output of the container prints the text "Waiting for connections" the code will continue at this
 	// point
 	// At that moment, in the project directory there will be the following files:
-	//   report.mongo:latest.md: Project based on  https://github.com/google/osv-scanner security reporting
+	//   report.mongo:6.0.6.md: Project based on  https://github.com/google/osv-scanner security reporting
 	//   stats.delete_mongo.0.csv: Container performance and memory consumption report, based on point-in-time data
 	//   captures
 

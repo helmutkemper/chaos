@@ -189,7 +189,7 @@ func (el *Primordial) GetLastError() (err error) {
 //
 //	Example:
 //	  GarbageCollector("mongo") will delete any docker element with the term `mongo` contained in the name, which
-//	  includes the image named `mongo:latest`, container named `mongodb` and network name `mongodb_network`
+//	  includes the image named `mongo:6.0.6`, container named `mongodb` and network name `mongodb_network`
 func (el *Primordial) GarbageCollector(names ...string) (ref *Primordial) {
 	standalone.GarbageCollector(names...)
 	return el

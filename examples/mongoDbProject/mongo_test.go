@@ -64,13 +64,13 @@ func TestSimpleLinearBasic(t *testing.T) {
 		// Test: [opcional] Permite ao controlador de lixo remover qualquer imagem, rede, volume ou container criado para o teste, tanto no início do teste quanto no final do teste
 		//       t: ponteiro do framework de teste
 		//       pathToSave: Salva, na pasta "./end", a saída padrão de todos os containers removidos no final do teste
-		//       names: [opcional] "mongo:latest" remove a imagem ao final do teste, limpando espaço em disco
+		//       names: [opcional] "mongo:6.0.6" remove a imagem ao final do teste, limpando espaço em disco
 		//              Como regra, todos os elementos criados pelo teste contém a palavra `delete` como um identificador de algo criado para o teste, porém, você pode passar nomes de elementos docker criados para o teste que serão removidos ao final do teste. Cuidado, essa uma busca Contains(docker.element, name)
-		Test(t, "./end", "mongo:latest")
+		Test(t, "./end", "mongo:6.0.6")
 
 	// Fábrica de container baseado em uma imagem existente
 	factory.NewContainerFromImage(
-		"mongo:latest",
+		"mongo:6.0.6",
 	).
 		// [opcional] Determina uma ou mais portas a serem expostas na rede
 		//            Regra: use uma linha por porta e uma porta por container.
@@ -97,7 +97,7 @@ func TestSimpleLinearBasic(t *testing.T) {
 
 	// Quando a saída padrão do container imprimir o texto "Waiting for connections" o código chegará nesse ponto
 	// Nesse momento, no diretório do projeto haverá os seguintes arquivos:
-	//   report.mongo:latest.md: Relatório de segurança baseado no projeto https://github.com/google/osv-scanner
+	//   report.mongo:6.0.6.md: Relatório de segurança baseado no projeto https://github.com/google/osv-scanner
 	//   stats.delete_mongo.0.csv: Relatório de consumo de memória e desempenho do container, baseado em capturas de dados pontuais
 
 	// Caso queira controlar o tempo total do teste, crie uma go routine e deixe o teste ocorrer em paralelo
@@ -180,7 +180,7 @@ func TestLinearNetworkWithProblems(t *testing.T) {
 		Test(t, "./end")
 
 	factory.NewContainerFromImage(
-		"mongo:latest",
+		"mongo:6.0.6",
 	).
 		// Limita a origem de conexão ao MongoDB
 		// Como o container de simulação de rede tem o nome "delay", o container será criado com nome, e o host name, "delete_delay_0"
@@ -274,11 +274,11 @@ func TestSimpleLinearComplex(t *testing.T) {
 		// Para que o hostname funcione de forma correta, dentro do docker, deve ser criada uma rede, por isto, não comente
 		// a criação de rede
 		NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1").
-		// Caso queira continuar usando a imagem "mongo:latest", apenas não coloque o nome dela aqui
+		// Caso queira continuar usando a imagem "mongo:6.0.6", apenas não coloque o nome dela aqui
 		Test(t, "./end")
 
 	mongoDocker := factory.NewContainerFromImage(
-		"mongo:latest",
+		"mongo:6.0.6",
 	).
 		// A função Create() manda criar 3 containers, por isto, o primeiro container terá a porta 27017 direcionada para
 		// a porta 27016 na rede e assim por diante.
@@ -465,18 +465,13 @@ func TestSimpleLinearComplex(t *testing.T) {
 	}
 }
 
-func TestSimpleChaosComplex(t *testing.T) {
+func TestComplexChaos(t *testing.T) {
 
 	primordial := factory.NewPrimordial().
-		// Segundo manual do MongoDB, a replica set só ira funcionar se o hostname for definido, não podendo usar endereço IP
-		// Para que o hostname funcione de forma correta, dentro do docker, deve ser criada uma rede, por isto, não comente a criação de rede
 		NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1").
+		Test(t, "./end", "mongo:6.0.6")
 
-		// Caso queira continuar usando a imagem "mongo:latest", apenas não coloque o nome dela aqui
-		// A pasta ./end receberá a saída padrão de todos os containers para análise posterior [dados reescritos a cada teste]
-		Test(t, "./end")
-
-	// Estrutura do banco MongoDB com replica set
+	// MongoDB database structure with replica set
 	//
 	//           +-------------+
 	//           |             |
@@ -495,10 +490,10 @@ func TestSimpleChaosComplex(t *testing.T) {
 	// +-------------+     +-------------+
 	//
 	mongoDocker := factory.NewContainerFromImage(
-		"mongo:latest",
+		"mongo:6.0.6",
 	).
 		// Impede que o MongoDB aceite conexão externa diretamente;
-		// Cada banco aceitará apenas conexão do container "delay" especificado;
+		// Cada banco aceitará apenas conexão do container "delete_delay_x" especificado;
 		EnvironmentVar([]string{"bindIp:delete_delay_0"}, []string{"bindIp:delete_delay_1"}, []string{"bindIp:delete_delay_2"}).
 		Cmd([]string{"mongod", "--replSet", "rs0"}).
 		WaitForFlagTimeout("Waiting for connections", 30*time.Second).
@@ -507,6 +502,9 @@ func TestSimpleChaosComplex(t *testing.T) {
 		FailFlag("./bug", "Address already in use", "panic:", "bug:").
 
 		// Habilita o processo de caos
+		// Quantidade máxima de container parados: 1
+		// Quantidade máxima de container pausados: 1
+		// Quantidade máxima de container parados e pausados: 1
 		EnableChaos(1, 1, 1).
 		Create("mongo", 3).
 		Start()

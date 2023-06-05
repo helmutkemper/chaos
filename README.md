@@ -69,7 +69,7 @@ func TestLinear(t *testing.T) {
     Test(t)
 
   factory.NewContainerFromImage(
-    "mongo:latest",
+    "mongo:6.0.6",
   ).
     Ports("tcp", 27017, 27017).
     EnvironmentVar([]string{"--bind_ip_all"}).
@@ -184,7 +184,7 @@ func TestLinear(t *testing.T) {
 		Test(t)
 
 	factory.NewContainerFromImage(
-		"mongo:latest",
+		"mongo:6.0.6",
 	).
 		Ports("tcp", 27017, 27017).
 		EnvironmentVar([]string{"--bind_ip_all"}).

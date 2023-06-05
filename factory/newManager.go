@@ -11,18 +11,31 @@ type ProxyConfig struct {
 	Destination string
 	MinDelay    int64
 	MaxDelay    int64
+	Open        bool
 }
 
 // NewContainerNetworkProxy
 //
 // Create a container with a proxy simulating a slow network.
 //
-//	Input:
-//	  containerName: name of container
-//	  localPort: connection port. eg.: 27016 for MongoDB
-//	  destination: container destination. eg. delete_mongo_0:27017 for MongoDB
-//	  minDelay: min delay in milliseconds for block of 32k bytes. Use 0 for default value
-//	  maxDelay: max delay in milliseconds for block of 32k bytes. Use 0 for default value
+//		Input:
+//		  containerName: name of container
+//		  localPort: connection port. eg.: 27016 for MongoDB
+//		  destination: container destination. eg. delete_mongo_0:27017 for MongoDB
+//		  minDelay: min delay in milliseconds for block of 32k bytes. Use 0 for default value
+//		  maxDelay: max delay in milliseconds for block of 32k bytes. Use 0 for default value
+//
+//	    |---------------------------- NORMAL NETWORK ---------------|
+//	     /¯¯¯¯¯¯¯¯¯¯¯\  /¯¯¯¯¯¯¯¯¯¯¯\  /¯¯¯¯¯¯¯¯¯¯¯\  /¯¯¯¯¯¯¯¯¯¯¯\
+//	    |             ||             ||             ||             |
+//	     \___________/  \___________/  \___________/  \___________/
+//
+//
+//	     |-------------------------- SIMULATION NETWORK --------------------------------|
+//	     /¯¯¯¯¯¯¯¯¯¯¯\         /¯¯¯¯¯¯¯¯¯¯¯\         /¯¯¯¯¯¯¯¯¯¯¯\         /¯¯¯¯¯¯¯¯¯¯¯\
+//	    |             |-------|             |-------|             |-------|             |
+//	     \___________/         \___________/         \___________/         \___________/
+//	     |- package -|- delay -|- package -|- delay -|- package -|- delay -|- package -|
 func NewContainerNetworkProxy(containerName string, config []ProxyConfig) (reference *manager.ContainerFromImage) {
 
 	envFinal := make([][]string, 0)

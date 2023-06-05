@@ -7,86 +7,129 @@ import (
 	"time"
 )
 
-// Este é um teste com criação de replica set para MongoDB.
-// Caso tenha pulado a explicação anterior, ela contém o conhecimento básico de uso do sistema. Aqui são adicionadas mais informações
+// This is a test with replica set creation for MongoDB.
+// In case you skipped the previous explanation, it contains the basic knowledge of using the system. More information
+// is added here.
 //
-// Neste exemplo serão mostradas as configurações de comandos iniciais do container, acesso ao terminal, tratamento de resposta do terminal e conceitos de rede docker
+// This example will show the initial command configurations of the container, terminal access, terminal response
+// handling and docker network concepts
 func TestComplexLinear(t *testing.T) {
 
 	primordial := factory.NewPrimordial().
-		// Segundo manual do MongoDB, a replica set só ira funcionar se o hostname for definido, não podendo usar endereço IP
-		// Para que o hostname funcione de forma correta, dentro do docker, deve ser criada uma rede, por isto, não comente
-		// a criação de rede
+		// According to the MongoDB manual, the replica set will only work if the hostname is defined, not being able to
+		// use an IP address
+		// For the hostname to work correctly, within docker, a network must be created, so do not comment on the network
+		// creation
 		NetworkCreate("test_network", "10.0.0.0/16", "10.0.0.1").
-		// Caso queira continuar usando a imagem "mongo:latest", apenas não coloque o nome dela aqui
-		Test(t, "./end")
+		// If you want to keep using the "mongo:6.0.6" image, just don't put its name here
+		Test(t, "./end", "mongo:6.0.6")
 
+	// MongoDB database structure with replica set
+	//
+	//           +-------------+
+	//           |             |
+	//           |   arbiter   |
+	//           |   MongoDB   |
+	//           |             |
+	//           +------+------+
+	//                  |
+	//        +---------+---------+
+	//        |                   |
+	// +------+------+     +------+------+
+	// |             |     |             |
+	// |  replica 1  |     |  replica 2  |
+	// |   MongoDB   |     |   MongoDB   |
+	// |             |     |             |
+	// +-------------+     +-------------+
+	//
 	mongoDocker := factory.NewContainerFromImage(
-		"mongo:latest",
+		"mongo:6.0.6",
 	).
-		// A função Create() manda criar 3 containers, por isto, o primeiro container terá a porta 27017 direcionada para
-		// a porta 27016 na rede e assim por diante.
-		// Caso seja passada apenas uma porta, apenas o primeiro container terá sua porta exposta na rede
-		// Caso o container tenha várias portas, repita uma linha por porta
+		// The Create() function tells you to create 3 containers, so the first container will have port 27017 directed to
+		// port 27016 on the network and so on.
+		// If only one port is passed, only the first container will have its port exposed on the network
+		// If the container has multiple ports, repeat one line per port
 		Ports("tcp", 27017, 27016, 27017, 27018).
 
-		// Imagine que você necessita usar a porta 27018, a porta usada para replicação secundária. Repita o comando com a próxima porta.
+		// Imagine that you need to use port 27018, the port used for secondary replication. Repeat the command with the
+		// next port.
 		// Ports("tcp", 27018, 27019, 27020, 27021).
 
-		// Quando trabalhar com o MongoDB, tome cuidado na hora de especificar o IP a ser liberado, pois, bindIp: 0.0.0.0
-		// irá liberar a conexão pelo IP 0.0.0.0, já o flag "--bind_ip_all" irá liberar para todos os IPs, o que é bem parecido, porém, NÃO É A MESMA COISA.
-		// bindIp: 0.0.0.0 apenas aceita conexão especificada como sendo IP 0.0.0.0, --bind_ip_all aceita IP especificado como sendo 127.0.0.1, por exemplo.
+		// When working with MongoDB, be careful when specifying the IP to be released, because bindIp: 0.0.0.0 will release
+		// the connection through the IP 0.0.0.0, while the flag "--bind_ip_all" will release for all IPs, which is very
+		// similar, however, IT IS NOT THE SAME THING.
+		// bindIp: 0.0.0.0 only accepts connection specified as IP 0.0.0.0, --bind_ip_all accepts IP specified as 127.0.0.1
+		// for example.
 		EnvironmentVar([]string{"--bind_ip_all"}).
 
-		// Imagine que apenas o container 0 vai receber acesso externo
-		// A lógica é simples: se apenas um valor é passado, ele serve para todos os containers, se mais de um valor é passado a chave 0 vai para container 0, a chave 1 vai para o container 1 e assim por diante
+		// Imagine that only container 0 will receive external access
+		// The logic is simple: if only one value is passed, it works for all containers, if more than one value is passed,
+		// key 0 goes to container 0, key 1 goes to container 1 and so on.
 		// EnvironmentVar([]string{"--bind_ip_all"}, []string{}, []string{}).
 
-		// Quando o container inicia, o MongoDB necessita receber o flag "--replSet NAME_REPLICA_SET", como no exemplo abaixo
+		// When the container starts, MongoDB needs to receive the "--replSet NAME_REPLICA_SET" flag, as in the
+		// example below:
 		// $ docker run -p 27017:27017 --name mongo --net mongo_network mongo mongod --replSet rs0
-		// No caso do MongoDB, alguns tutoriais omitem o nome do shell que irá receber o flag "--replSet rs0", dessa forma:
+		// In the case of MongoDB, some tutorials omit the name of the shell that will receive the "--replSet rs0" flag,
+		// like this:
 		// $ docker run -p 27017:27017 --name mongo --net mongo_network mongo --replSet rs0
-		// Porém, no nosso caso, ele deve ser passado, como no comando abaixo
+		// However, in our case, it must be passed, as in the command below
 		Cmd([]string{"mongod", "--replSet", "rs0"}).
 
-		// Caso necessite esperar por um flag indicador de sucesso, adicione um texto e o sistema ficará parado esperando pelo mesmo, porém, tome cuidado, e adicione o texto pensando em texto caso sensitivo.
-		// Esta função usa a contains(str, text) para procurar texto, por isto, tome cuidado com texto muito curto
+		// If you need to wait for a success indicator flag, add a text and the system will be stopped waiting for it,
+		// however, be careful, and add the text thinking about case sensitive text.
+		// This function uses strings.Contains(container.stdOutput, "Waiting for connections") to search for text, so be
+		// careful with very short text
 		WaitForFlagTimeout("Waiting for connections", 30*time.Second).
 
-		// [opcional] Procura por textos indicadores de falha na saída padrão do container e salva a saída padrão do container na pasta indicada, para análise posterior. (cuidado: o texto é caso sensitivo)
-		// Caso queira fazer um teste rápido, use a palavra "Waiting" e veja a pasta "bug" quando o container começar a rodar
-		// Cuidado, ele procura por contains(str, text), por causa disso, o flag "fail" poderá encontrá as palavras "maxFailedInitialSyncAttempts" ou "failed". Por isto, eu coloco os dois pontos (:)
+		// [optional] Looks for failure indicator texts in the container's standard output and saves the container's
+		// standard output in the indicated folder for later analysis. (caution: the text is case sensitive)
+		// If you want to do a quick test, use the word "Waiting" and look in the "bug" folder when the container starts
+		// running
+		// Beware, it looks for string use the function strings.Contains(container.stdOutput, text), because of this the
+		// "fail" flag might find the words "maxFailedInitialSyncAttempts" or "failed". For this reason, I put the colon (:)
 		FailFlag("./bug", "Address already in use", "panic:", "bug:").
 
-		//Volumes("/etc/mongod.conf", "/Users/kemper/go/projetos/chaos/examples/mongoDbProject/conf/mongod_0.conf", "/Users/kemper/go/projetos/chaos/examples/mongoDbProject/conf/mongod_1.conf", "/Users/kemper/go/projetos/chaos/examples/mongoDbProject/conf/mongod_2.conf").
+		//Volumes("/etc/mongod.conf", "./conf/mongod_0.conf", "./conf/mongod_1.conf", "./conf/mongod_2.conf").
 
-		// Determina a criação de 3 containers nos endereços 10.0.0.2:27016, 10.0.0.3:27017, 10.0.0.4:27018, host names delete_mongo_0, delete_mongo_1 e delete_mongo_2
-		// Caso necessite mudar o host name, use a função HostName() e especifique um nome para cada container. Lembre-se, hostname requer uma rede anexada ao container
+		// Determines the creation of 3 containers at addresses 10.0.0.2:27017 (exposed port 27016), 10.0.0.3:27017
+		// (exposed port 27017), 10.0.0.4:27017 (exposed port 27018), host names delete_mongo_0, delete_mongo_1 and
+		// delete_mongo_2
+		// If you need to change the host name, use the HostName() function and specify a name for each container. Remember,
+		// hostname requires a network attached to the container
 		Create("mongo", 3).
 
-		// Embora seja obvio, é bom lembrar que as funções Create() e Start() devem ser as duas últimas funções chamadas
+		// Although it goes without saying, it's good to remember that the Create() and Start() functions must be the last
+		// two functions called
 		Start()
 
-	// Nesse ponto do código, os bancos estão prontos para uso, porém, a criação de replicas requer comandos do terminal
-	// Para fazer isto, especifique a chave do container, 0 para o primeiro container criado o interpretador de comandos a ser usado e o flag indicador de que esses comandos serão enviados via texto, "-c", ou seja:
+	// At this point in the code, the banks are ready to use, however creating replicas requires the use of terminal
+	// commands
+	// To do this, specify the container key, 0 for the first container created, the command interpreter to be used and
+	// the flag indicating that these commands will be sent via text, "-c", that is:
 	// `/bin/bash -c "echo Hello World!"`
 
-	// Escrever comandos de terminal para que o mongodb se transforme em replicaset
+	// Write terminal commands to turn mongodb into replicaset
 	var stdOutput []byte
 	var err error
 
-	// Para transformar o MongoDB do container de chave 2, delete_mongo_2, em secundário de replica set, é necessário acessar o container pelo terminal, acionar o terminal do MongoDB e passar o comando "rs.secondaryOk_()"
-	// Explicação:
-	//   * "/bin/bash": é o interpretador de comandos do linux
-	//   * "-c": o comando vai chegar via string de texto, exemplo: `/bin/bash -c "echo Hello World!"`
-	//   * "mongosh": é o interpretador de comandos do MongoDB
-	//   * "127.0.0.1:27017": é o endereço de conexão na rede. Nesse ponto, perceba, o comando está acessando diretamente o container, e dentro do container, a porta é 27017 e o endereço é localhost. Não confunda o acesso interno, diretamente no container com acesso externo.
-	//   * "--eval \"rs.secondaryOk_()\"": eval permite executar um comando javascript via texto, e como é texto dentro de texto, as aspas estão escapadas.
+	// To transform the MongoDB of key container 2, delete_mongo_2, into a replica set secondary, it is necessary to
+	// access the container through the terminal, activate the MongoDB terminal and pass the command "rs.secondaryOk()"
+	// Explanation:
+	//   * "/bin/bash": is the linux command interpreter
+	//   * "-c": the command will arrive via text string, example: `bin bash -c "echo Hello World!"`
+	//   * "mongosh": is the MongoDB command interpreter
+	//   * "127.0.0.1:27017": is the connection address on the network. At this point, notice, the command is accessing
+	//     the container directly, and inside the container, the port is 27017 and the address is localhost. Do not
+	//     confuse internal access, directly in the container with external access.
+	//   * "--eval \"rs.secondaryOk_()\"": eval lets you run a javascript command via text, and since it's text within
+	//     text, the quotes are escaped.
 
-	// Quando isto acontecer, o comando vai devolver um texto contendo um indicador de erro ou sucesso em caso de falta de indicador. Os indicadores são:
-	//   * DeprecationWarning: No MongoDB 6.0.6 pode ser ignorado
-	//   * MongoNetworkError: Falha de conexão com o banco de dados
-	//   * TypeError: Erro de sintaxe
+	// When this happens, the command will return a text containing an error or success indicator in case of missing
+	// indicator. The indicators are:
+	//   * DeprecationWarning: In MongoDB 6.0.6 can be ignored
+	//   * MongoNetworkError: Database connection failure
+	//   * TypeError: syntax error
 
 	_, _, stdOutput, _, err = mongoDocker.Command(2, "/bin/bash", "-c", "mongosh 127.0.0.1:27017 --eval \"rs.secondaryOk()\"")
 	if err != nil {
@@ -99,8 +142,9 @@ func TestComplexLinear(t *testing.T) {
 		t.FailNow()
 	}
 
-	// Repete o mesmo processo para o container de chave 1, delete_mongo_1
-	// Nota: Os containers secundários devem receber o comando "rs.secondaryOk()" antes do container principal receber o comando "rs.initiate()"
+	// Repeat the same process for key container 1, delete_mongo_1
+	// Note: Secondary containers must receive the command "rs.secondaryOk()" before the main container receives the
+	// command "rs.initiate()"
 	_, _, stdOutput, _, err = mongoDocker.Command(1, "/bin/bash", "-c", "mongosh 127.0.0.1:27017 --eval \"rs.secondaryOk()\"")
 	if err != nil {
 		t.Logf("mongoDocker.Command().error: %v", err.Error())
@@ -112,7 +156,7 @@ func TestComplexLinear(t *testing.T) {
 		t.FailNow()
 	}
 
-	// Inicializa o container de chave 0, delete_mongo_0, como sendo a instância MongoDB arbitro de replica set
+	// Initializes the container key 0, delete_mongo_0, as the replica set arbiter MongoDB instance
 	_, _, stdOutput, _, err = mongoDocker.Command(0, "/bin/bash", "-c", "mongosh 127.0.0.1:27017 --eval \"rs.initiate()\"")
 	if err != nil {
 		t.Logf("mongoDocker.Command().error: %v", err.Error())
@@ -124,21 +168,24 @@ func TestComplexLinear(t *testing.T) {
 		t.FailNow()
 	}
 
-	// A falta de indicador de erro, por sí só é um indicador de sucesso, mas, o comando devolverá um json no seguinte formato:
+	// The lack of an error indicator in itself is a success indicator, but the command will return a json in the
+	// following format:
 	// {
 	//   info2: 'no configuration specified. Using a default configuration for the set',
 	//   me: 'delete_mongo_0:27017',
 	//   ok: 1
 	// }
 	//
-	// Caso você necessite processar o json, você poderá expressão regular, https://regex101.com/library/sjOfeq?orderBy=MOST_POINTS&page=3&search=json
+	// In case you need to process the json you can use regular expression,
+	// https://regex101.com/library/sjOfeq?orderBy=MOST_POINTS&page=3&search=json
 
-	// Adiciona o MongoDB contido no container delete_mongo_1 como sendo membro do replica set
-	// Notas:
-	//   * Como o comando é passado via texto dentro de texto, cuidado com as aspas escapadas;
-	//   * Dentro da rede docker, todos os MongoDB estão da porta 27017, as portas 27016, 27017 e 27018 são as portas expostas ao mundo, não na rede docker;
-	//   * O host name "delete_mongo_x" só funciona dentro da rede docker
-	//   * O MongoDB não aceita configuração de replica set por IP, apenas por host name
+	// Adds the MongoDB contained in the delete_mongo_1 container as a member of the replica set
+	// Notes:
+	//   * Since the command is passed via text within text, beware of escaped quotes;
+	//   * Inside the docker network, all MongoDB are on port 27017, ports 27016, 27017 and 27018 are the ports exposed
+	//     to the world, not in the docker network;
+	//   * The host name "delete_mongo_x" only works inside the docker network
+	//   * MongoDB does not accept replica set configuration by IP, only by host name
 	_, _, stdOutput, _, err = mongoDocker.Command(0, "/bin/bash", "-c", "mongosh 127.0.0.1:27017 --eval \"rs.add(\\\"delete_mongo_1:27017\\\")\"")
 	if err != nil {
 		t.Logf("mongoDocker.Command().error: %v", err.Error())
@@ -150,7 +197,7 @@ func TestComplexLinear(t *testing.T) {
 		t.FailNow()
 	}
 
-	// Por pura curiosidade, em caso de sucesso, o MongoDB devolve o json:
+	// Out of pure curiosity, in case of success, MongoDB returns the json:
 	// {
 	//   ok: 1,
 	//   '$clusterTime': {
@@ -163,7 +210,7 @@ func TestComplexLinear(t *testing.T) {
 	//   operationTime: Timestamp({ t: 1685399709, i: 1 })
 	// }
 
-	// Adicione a próxima instância MongoDB ao replica set
+	// Add the next MongoDB instance to the replica set
 	_, _, stdOutput, _, err = mongoDocker.Command(0, "/bin/bash", "-c", "mongosh 127.0.0.1:27017 --eval \"rs.add(\\\"delete_mongo_2:27017\\\")\"")
 	if err != nil {
 		t.Logf("mongoDocker.Command().error: %v", err.Error())
@@ -175,7 +222,8 @@ func TestComplexLinear(t *testing.T) {
 		t.FailNow()
 	}
 
-	// Caso você queira fazer uma última verificação, passe o comando "rs.status()" para qualquer instância mongo, ela deve devolver um json contando "set: 'rs0'" e "name: 'delete_mongo_x:27017'" para cada instância MongoDB
+	// If you want to do one last check, pass the "rs.status()" command to any mongo instance, it should return a json
+	// counting "set: 'rs0'" and "name: 'delete_mongo_x:27017'" for each MongoDB instance
 	_, _, stdOutput, _, err = mongoDocker.Command(0, "/bin/bash", "-c", "mongosh --eval \"rs.status()\"")
 	if err != nil {
 		t.Logf("mongoDocker.Command().error: %v", err.Error())
@@ -187,23 +235,28 @@ func TestComplexLinear(t *testing.T) {
 		t.FailNow()
 	}
 
-	// Nesse ponto do projeto, a replica set de MongoDB foi configurada com dados efêmeros e está em uma rede docker, comas portas 27016, 27017 e 27018 expostas ao mundo, mas, a replica set, por regra do MongoDB, só aceita conexão via host name, e host name só funciona na rede docker, por isto o teste deve ser feito em container
+	// At this point in the project, the MongoDB replica set has been configured with ephemeral data and is on a docker
+	// network, with ports 27016, 27017 and 27018 exposed to the world, but the replica set, by MongoDB rule, only
+	// accepts connections via host name, and host name only works on the docker network, so the test must be done
+	// in a container
 
-	// Cria um container a partir de uma pasta local
+	// Create a container from a local folder
 	factory.NewContainerFromFolder(
 		"folder:latest",
 		"./mongodbClient",
 	).
 
-		// Monta o dockerfile de forma automática caso o arquivo "main.go" esteja na raiz do projeto e o arquivo "go.mod" exista, mesmo que em branco.
-		// Você pode especificar o caminho do Dockerfile, caso ele não esteja na raiz do projeto com o comando DockerfilePath("./path/inside/container/Dockerfile")
+		// Automatically mounts the Dockerfile if the "main.go" file is in the root of the project and the "go.mod" file
+		// exists, even if it is blank.
+		// You can specify the Dockerfile path, if it is not in the root of the project with the
+		// DockerfilePath("./path/inside/container/Dockerfile") command
 		MakeDockerfile().
 		WaitForFlagTimeout("container is running", 10*time.Second).
 		FailFlag("./bug", "panic:").
 		Create("mongodbClient", 1).
 		Start()
 
-	// Deixa o projeto rodando por 5 minutos
+	// Let the project run for 5 minutes
 	if !primordial.Monitor(5 * time.Minute) {
 		t.Fail()
 	}

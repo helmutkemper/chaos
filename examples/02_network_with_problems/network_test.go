@@ -14,10 +14,10 @@ import (
 	"time"
 )
 
-// Este é um teste com simulação de rede com problemas
-// Caso tenha pulado a explicação anterior, ela contém o conhecimento básico de uso do sistema. Aqui são adicionadas mais informações
+// This is a test with network with problems simulation
+// In case you skipped the previous explanation, it contains the basic knowledge of using the system. More information is added here.
 //
-// Neste exemplo será mostrado como criar um container com a capacidade de atrapalhar a conexão de rede
+// This example will show how to create a container with the ability to disturb the network connection
 func TestLinearNetworkWithProblems(t *testing.T) {
 
 	//                                        bindIp:delete_delay_0
@@ -33,37 +33,50 @@ func TestLinearNetworkWithProblems(t *testing.T) {
 		Test(t, "./end")
 
 	factory.NewContainerFromImage(
-		"mongo:latest",
+		"mongo:6.0.6",
 	).
-		// Limita a origem de conexão ao MongoDB
-		// Como o container de simulação de rede tem o nome "delay", o container será criado com nome, e o host name, "delete_delay_0"
+		// Limit connection source to MongoDB
+		// The network simulation container has the name "delay", the container will be created with name, and the host name, "delete_delay_0"
 		EnvironmentVar([]string{"bindIp:delete_delay_0"}).
 		Create("mongo", 1).
 		Start()
 
-	// Cria um container com a propriedade de interromper pacotes de rede e simular uma rede com problemas
+	//
+	// |--------------------- NORMAL NETWORK ---------------------|
+	//  /¯¯¯¯¯¯¯¯¯¯¯\  /¯¯¯¯¯¯¯¯¯¯¯\  /¯¯¯¯¯¯¯¯¯¯¯\  /¯¯¯¯¯¯¯¯¯¯¯\
+	// |             ||             ||             ||             |
+	//  \___________/  \___________/  \___________/  \___________/
+	//
+	//
+	//  |-------------------------- SIMULATION NETWORK --------------------------------|
+	//  /¯¯¯¯¯¯¯¯¯¯¯\         /¯¯¯¯¯¯¯¯¯¯¯\         /¯¯¯¯¯¯¯¯¯¯¯\         /¯¯¯¯¯¯¯¯¯¯¯\
+	// |             |-------|             |-------|             |-------|             |
+	//  \___________/         \___________/         \___________/         \___________/
+	//  |- package -|- delay -|- package -|- delay -|- package -|- delay -|- package -|
+	//
+	// Creates a container with the ability to interrupt network packets and simulate a network with problems
 	factory.NewContainerNetworkProxy(
 		"delay",
 
-		// Uma configuração para cada container proxy
+		// One configuration for each proxy container
 		[]factory.ProxyConfig{
 			{
-				// Porta de entrada do mundo externo
+				// Port to the outside world
 				LocalPort: 27016,
-				// Conexão com elemento passivo, nesse caso, o MongoDB
+				// Connection with the passive element, in this case, MongoDB
 				Destination: "delete_mongo_0:27017",
 
-				// Tempo mínimo e máximo para atraso entre pacotes
+				// Minimum and maximum time for delay between packets
 				// total test time: ~1.8s
 				//MinDelay: 0,
 				//MaxDelay: 0,
 
-				// Tempo mínimo e máximo para atraso entre pacotes
+				// Minimum and maximum time for delay between packets
 				// total test time: ~1m58
 				MinDelay: 100,
 				MaxDelay: 130,
 
-				// Tempo mínimo e máximo para atraso entre pacotes
+				// Minimum and maximum time for delay between packets
 				// error: panic: connection(0.0.0.0:27016[-5]) socket was unexpectedly closed: EOF
 				//MinDelay: 100,
 				//MaxDelay: 140,
