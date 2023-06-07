@@ -130,42 +130,40 @@ func TestComplexChaos(t *testing.T) {
 	// network, but the replica set, by MongoDB rule, only accepts connection via host name, and host name only works on
 	// the docker network, for this test must be done in container
 
-	// Network structure in chaos/failure test                                          Log container                        | Log events
-	//                                                                                  -------------------------------------+--------------------------------------------------
-	//                      +-------------+     +-------------+      +-------------+    03/06/2023 19:14:04: inserted 175000 |
-	//                      |             |     |             |      |   control   |    03/06/2023 19:14:06: inserted 176000 |
-	//                  +-> |    proxy    | --> |   MongoDB   | <-+- |      of     |    03/06/2023 19:14:07: inserted 177000 |
-	//                  |   |             |     |             |   |  |    chaos    |    03/06/2023 19:14:08: inserted 178000 |
-	//                  |   +-------------+     +-------------+   |  +-------------+    no data                              | 03/06/2023 19:14:09: pause(): delete_mongo_0
-	//                  |   delete_delay_0      delete_mongo_0    |                     no data                              |
-	//                  |                                         |                     no data                              | 03/06/2023 19:15:16: unpause(): delete_mongo_0
-	// +-------------+  |   +-------------+     +-------------+   |                     03/06/2023 19:15:17: inserted 179000 |
-	// |             |  |   |             |     |             |   |                     03/06/2023 19:15:18: inserted 180000 |
-	// | golang code | -+-> |    proxy    | --> |   MongoDB   | <-+
-	// |             |  |   |             |     |             |   |                     See the example log:
-	// +-------------+  |   +-------------+     +-------------+   |                     The log shows MongoDB saving a block of a thousand individual inserts once or twice a second;
-	//                  |   delete_delay_1      delete_mongo_1    |                     The first failure happened at 19:12:05 (pause(): delete_mongo_2) and lasted until 19:14:09;
-	//                  |                                         |                     The number of saved blocks remains the same, even with a stopped secondary replica;
-	//                  |   +-------------+     +-------------+   |                     The second failure happened at 19:14:09 (pause(): delete_mongo_0) and lasted until 19:15:16, however delete_mongo_0 is the "arbiter" bank;
-	//                  |   |             |     |             |   |                     The log shows the last block being saved at "03/06/2023 19:14:08: inserted 178000" and then jumps to "03/06/2023 19:15:17: inserted 179000";
-	//                  +-> |    proxy    | --> |   MongoDB   | <-+                     Therefore, the replica set was stopped until the event "unpause(): delete_mongo_0" at 19:15:16, therefore, the replica set is limited by the arbiter bank.
-	//                      |             |     |             |
-	//                      +-------------+     +-------------+                         The standard output of the "delete_mongodbClient_0.log" container will be automatically saved in the ".end" folder
-	//                      delete_delay_2      delete_mongo_2                          The pause/stop events will be shown in the standard output of go
-	//                            |
-	//                            |
-	//                            ↓
-	// |--------------------- NORMAL NETWORK ---------------------|
-	//  /¯¯¯¯¯¯¯¯¯¯¯\  /¯¯¯¯¯¯¯¯¯¯¯\  /¯¯¯¯¯¯¯¯¯¯¯\  /¯¯¯¯¯¯¯¯¯¯¯\
-	// |             ||             ||             ||             |
-	//  \___________/  \___________/  \___________/  \___________/
-	//
-	//
-	//  |-------------------------- SIMULATION NETWORK --------------------------------|
-	//  /¯¯¯¯¯¯¯¯¯¯¯\         /¯¯¯¯¯¯¯¯¯¯¯\         /¯¯¯¯¯¯¯¯¯¯¯\         /¯¯¯¯¯¯¯¯¯¯¯\
-	// |             |-------|             |-------|             |-------|             |
-	//  \___________/         \___________/         \___________/         \___________/
-	//  |- package -|- delay -|- package -|- delay -|- package -|- delay -|- package -|
+	// Network structure in chaos/failure test                                           Log container                        | Chaos events
+	//                                                                                   -------------------------------------+--------------------------------------------------
+	//                      +-------------+      +-------------+      +-------------+    03/06/2023 19:14:04: inserted 175000 |
+	//                      |             |      |             |      |   control   |    03/06/2023 19:14:06: inserted 176000 |
+	//                  +-> |    proxy    | ---> |   MongoDB   | <-+- |      of     |    03/06/2023 19:14:07: inserted 177000 |
+	//                  |   |             |      |             |   |  |    chaos    |    03/06/2023 19:14:08: inserted 178000 |
+	//                  |   +-------------+      +-------------+   |  +-------------+    no data                              | 03/06/2023 19:14:09: pause(): delete_mongo_0 (obs: replica set arbiter)
+	//                  |   delete_delay_0       delete_mongo_0    |                     no data                              |
+	//                  |                                          |                     no data                              | 03/06/2023 19:15:16: unpause(): delete_mongo_0 (obs: replica set arbiter)
+	// +-------------+  |   +-------------+      +-------------+   |                     03/06/2023 19:15:17: inserted 179000 |
+	// |             |  |   |             |      |             |   |                     03/06/2023 19:15:18: inserted 180000 |
+	// | golang code | -+-> |    proxy    | ---> |   MongoDB   | <-+
+	// |             |  |   |             |      |             |   |                     See the example log:
+	// +-------------+  |   +-------------+      +-------------+   |                     The log shows MongoDB saving a block of a thousand individual inserts once or twice a second;
+	//                  |   delete_delay_1       delete_mongo_1    |                     The first failure happened at 19:12:05 (pause(): delete_mongo_2) and lasted until 19:14:09;
+	//                  |                                          |                     The number of saved blocks remains the same, even with a stopped secondary replica;
+	//                  |   +-------------+      +-------------+   |                     The second failure happened at 19:14:09 (pause(): delete_mongo_0) and lasted until 19:15:16, however delete_mongo_0 is the "arbiter" bank;
+	//                  |   |             |      |             |   |                     The log shows the last block being saved at "03/06/2023 19:14:08: inserted 178000" and then jumps to "03/06/2023 19:15:17: inserted 179000";
+	//                  +-> |    proxy    | ---> |   MongoDB   | <-+                     Therefore, the replica set was stopped until the event "unpause(): delete_mongo_0" at 19:15:16, therefore, the replica set is limited by the arbiter bank.
+	//                      |             |      |             |
+	//                      +-------------+      +-------------+                         The standard output of the "delete_mongodbClient_0.log" container will be automatically saved in the ".end" folder
+	//                      delete_delay_2       delete_mongo_2                          The pause/stop events will be shown in the standard output of go
+	//                  ↑                    ↑
+	//                  |                    |    |---------------------------- SIMULATION NETWORK -----------------------------|
+	//                  |                    |    /¯¯¯¯¯¯¯¯¯¯¯\         /¯¯¯¯¯¯¯¯¯¯¯\         /¯¯¯¯¯¯¯¯¯¯¯\         /¯¯¯¯¯¯¯¯¯¯¯\
+	//                  |                    +-> |             |-------|             |-------|             |-------|             |
+	//                  |                         \___________/         \___________/         \___________/         \___________/
+	//                  |                         |- package -|- delay -|- package -|- delay -|- package -|- delay -|- package -|
+	//                  |
+	//                  |
+	//                  |   |--------------------- NORMAL NETWORK ---------------------|
+	//                  |    /¯¯¯¯¯¯¯¯¯¯¯\  /¯¯¯¯¯¯¯¯¯¯¯\  /¯¯¯¯¯¯¯¯¯¯¯\  /¯¯¯¯¯¯¯¯¯¯¯\
+	//                  +-> |             ||             ||             ||             |
+	//                       \___________/  \___________/  \___________/  \___________/
 	//
 	// Creates a container with the ability to interrupt network packets and simulate a network with problems
 	factory.NewContainerNetworkProxy(
