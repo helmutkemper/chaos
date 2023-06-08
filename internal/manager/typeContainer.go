@@ -3776,6 +3776,55 @@ func (el *ContainerFromImage) GitSshPassword(password string) (ref *ContainerFro
 	return el
 }
 
+// GitPassword
+//
+// English:
+//
+// # Set the password from the git user
+//
+// Português:
+//
+// Define a senha do usuário git
+func (el *ContainerFromImage) GitPassword(password string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
+	// Archives git password
+	el.gitPassword = password
+	return el
+}
+
+func (el *ContainerFromImage) GitPrivateToken(token string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
+	// Archive private git access token
+	el.gitPrivateToke = token
+	return el
+}
+
+func (el *ContainerFromImage) GitUser(user string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
+	// Archives git user
+	el.gitUser = user
+	return el
+}
+
+func (el *ContainerFromImage) GitSshPrivateKeyPath(path string) (ref *ContainerFromImage) {
+	if monitor.Err {
+		return el
+	}
+
+	// Path from git private key
+	el.gitSshPrivateKeyPath = path
+	return el
+}
+
 // GitCloneToBuildWithPrivateSSHKey
 //
 // English:

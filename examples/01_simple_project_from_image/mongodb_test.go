@@ -17,7 +17,7 @@ import (
 
 // Test01SimpleProjectFromImage creates a simple MongoDB database installation
 //
-// This example will show the basic settings of how to create an image-based container and how to expose a door to the
+// This example will show the basic settings of how to create an image-based container and how to expose a port to the
 // world.
 func Test01SimpleProjectFromImage(t *testing.T) {
 
