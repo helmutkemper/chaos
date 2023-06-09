@@ -130,26 +130,26 @@ func TestComplexChaos(t *testing.T) {
 	// network, but the replica set, by MongoDB rule, only accepts connection via host name, and host name only works on
 	// the docker network, for this test must be done in container
 
-	// Network structure in chaos/failure test                                           Log container                        | Chaos events
+	// Structure in chaos/failure test                                                   Log container                        | Chaos events
 	//                                                                                   -------------------------------------+--------------------------------------------------
 	//                      +-------------+      +-------------+      +-------------+    03/06/2023 19:14:05: inserted 175000 |
-	//                      |             |      |             |      |   control   |    03/06/2023 19:14:06: inserted 176000 |
-	//                  +-> |    proxy    | ---> |   MongoDB   | <-+- |      of     |    03/06/2023 19:14:07: inserted 177000 |
-	//                  |   |             |      |             |   |  |    chaos    |    03/06/2023 19:14:08: inserted 178000 |
+	//                      |             |      |   MongoDB   |      |   control   |    03/06/2023 19:14:06: inserted 176000 |
+	//                  +-> |    proxy    | ---> |             | <-+- |      of     |    03/06/2023 19:14:07: inserted 177000 |
+	//                  |   |             |      |   Arbiter   |   |  |    chaos    |    03/06/2023 19:14:08: inserted 178000 |
 	//                  |   +-------------+      +-------------+   |  +-------------+    no data                              | 03/06/2023 19:14:09: pause(): delete_mongo_0 (obs: replica set arbiter)
 	//                  |   delete_delay_0       delete_mongo_0    |                     no data                              |
 	//                  |                                          |                     no data                              | 03/06/2023 19:15:16: unpause(): delete_mongo_0 (obs: replica set arbiter)
 	// +-------------+  |   +-------------+      +-------------+   |                     03/06/2023 19:15:17: inserted 179000 |
-	// |             |  |   |             |      |             |   |                     03/06/2023 19:15:18: inserted 180000 |
-	// | golang code | -+-> |    proxy    | ---> |   MongoDB   | <-+
-	// |             |  |   |             |      |             |   |                     See the example log:
+	// |             |  |   |             |      |   MongoDB   |   |                     03/06/2023 19:15:18: inserted 180000 |
+	// | golang code | -+-> |    proxy    | ---> |             | <-+
+	// |             |  |   |             |      |  replica 0  |   |                     See the example log:
 	// +-------------+  |   +-------------+      +-------------+   |                     The log shows MongoDB saving a block of a thousand individual inserts once or twice a second;
 	//                  |   delete_delay_1       delete_mongo_1    |                     The first failure happened at 19:12:05 (pause(): delete_mongo_2) and lasted until 19:14:09;
 	//                  |                                          |                     The number of saved blocks remains the same, even with a stopped secondary replica;
 	//                  |   +-------------+      +-------------+   |                     The second failure happened at 19:14:09 (pause(): delete_mongo_0) and lasted until 19:15:16, however delete_mongo_0 is the "arbiter" bank;
-	//                  |   |             |      |             |   |                     The log shows the last block being saved at "03/06/2023 19:14:08: inserted 178000" and then jumps to "03/06/2023 19:15:17: inserted 179000";
-	//                  +-> |    proxy    | ---> |   MongoDB   | <-+                     Therefore, the replica set was stopped until the event "unpause(): delete_mongo_0" at 19:15:16, therefore, the replica set is limited by the arbiter bank.
-	//                      |             |      |             |
+	//                  |   |             |      |   MongoDB   |   |                     The log shows the last block being saved at "03/06/2023 19:14:08: inserted 178000" and then jumps to "03/06/2023 19:15:17: inserted 179000";
+	//                  +-> |    proxy    | ---> |             | <-+                     Therefore, the replica set was stopped until the event "unpause(): delete_mongo_0" at 19:15:16, therefore, the replica set is limited by the arbiter bank.
+	//                      |             |      |  replica 1  |
 	//                      +-------------+      +-------------+                         The standard output of the "delete_mongodbClient_0.log" container will be automatically saved in the ".end" folder
 	//                      delete_delay_2       delete_mongo_2                          The pause/stop events will be shown in the standard output of go
 	//                  ↑                    ↑
