@@ -102,6 +102,24 @@ func NewContainerFromImage(imageName string) (reference *manager.ContainerFromIm
 		Reports()
 }
 
+func NewContainerFromGitWithoutReport(imageName, serverPath string) (reference *manager.ContainerFromImage) {
+	ref := new(manager.Manager)
+	ref.New()
+	return ref.ContainerFromGit(imageName, serverPath)
+}
+
+func NewContainerFromFolderWithoutReport(imageName, buildPath string) (reference *manager.ContainerFromImage) {
+	ref := new(manager.Manager)
+	ref.New()
+	return ref.ContainerFromFolder(imageName, buildPath)
+}
+
+func NewContainerFromImageWithoutReport(imageName string) (reference *manager.ContainerFromImage) {
+	ref := new(manager.Manager)
+	ref.New()
+	return ref.ContainerFromImage(imageName)
+}
+
 func NewPrimordial() (reference *manager.Primordial) {
 	standalone.GarbageCollector()
 
