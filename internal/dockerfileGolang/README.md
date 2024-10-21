@@ -2,6 +2,8 @@
 
 https://github.com/helmutkemper/iotmaker.docker.builder
 
+https://kanishk.io/posts/cpu-throttling-in-containerized-go-apps/
+
 This module is a standard **Golang** Dockerfile generator used in the **iotmaker.docker.builder** project.
 
 Este módulo é um gerador de **Dockerfile** padrão para **Golang** usado no projeto **iotmaker.docker.builder**.
